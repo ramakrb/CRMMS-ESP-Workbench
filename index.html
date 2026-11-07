@@ -179,14 +179,16 @@
   .dt-slot-heading small { font-weight: 400; color: var(--ink-faint); }
   .filters-panel { margin: 8px; border: 1px solid var(--line-soft); border-radius: 10px; background: #fbfcfc; }
   .filters-panel > summary { padding: 8px 11px; font-weight: 800; cursor: pointer; font-size: 11.5px; color: var(--ink-soft); }
-  .filters-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; padding: 4px 11px 12px; }
-  .filters-grid label { display: grid; gap: 3px; font-size: 10px; font-weight: 700; color: var(--ink-faint); }
-  .filters-grid input, .filters-grid select {
+  .filters-grid { display: flex; flex-wrap: wrap; gap: 9px 18px; align-items: end; padding: 4px 11px 12px; }
+  .filters-grid label { display: grid; gap: 3px; font-size: 10px; font-weight: 700; color: var(--ink-faint); flex: 0 0 auto; }
+  .filters-grid select, .filters-grid input {
     font-family: inherit; font-size: 11.5px; color: var(--ink);
-    border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: #fff; width: 100%;
+    border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: #fff; width: auto;
   }
   .filters-grid .check-row { display: flex; gap: 12px; align-items: center; font-size: 11.5px; color: var(--ink-soft); font-weight: 400; text-transform: none; }
   .filters-grid .check-row input { width: auto; }
+  .data-table tr.row-selected td, .data-table tr.row-selected th { background: #e4f3f1 !important; }
+  .data-table td.period { cursor: pointer; }
   #presetBar .preset-desc {
     flex-basis: 100%;
     font-size: 11.5px;
@@ -550,7 +552,7 @@
         <label class="inline"><input type="checkbox" id="dtOnlyVisible"> Only visible traces</label>
       </span>
       <span id="dtInfo"></span>
-      <span id="dtHint">Click a trace column to highlight it in every chart; click again to clear.</span>
+      <span id="dtHint">Click a trace column to highlight it in every chart; click a period row to highlight the row; click again to clear.</span>
     </div>
     <div id="dtTables"></div>
   </section>
@@ -6738,7 +6740,11 @@ function tableControlInput(field, value, type) {
   const input = document.createElement("input");
   input.type = type || "text";
   input.dataset.tfield = field;
-  input.value = value == null ? "" : String(value);
+  if (type === "checkbox") {
+    input.checked = value === true || value === "true";  // reflect real state — .value does not
+  } else {
+    input.value = value == null ? "" : String(value);
+  }
   return input;
 }
 
@@ -6780,10 +6786,16 @@ function renderTableBlock(section, rawBlock) {
   const statWrap = tableControlWrap("Statistic", tableControlSelect("stat", [["sum", "Sum"], ["avg", "Average"], ["min", "Minimum"], ["max", "Maximum"], ["end", "End of period"]], block.stat));
   if (isMonthly) statWrap.style.display = "none";
   pGrid.appendChild(statWrap);
+  // year/month dropdowns populated from the slot's own data
+  const dataYears = [...new Set(slotData.traces.flatMap(tr => tr.points.map(p => p.year).filter(y => y != null)))].sort((a, b) => a - b);
+  const dataMonths = [...new Set(slotData.traces.flatMap(tr => tr.points.map(p => p.month).filter(m => m != null)))].sort((a, b) => a - b);
+  const yearOpts = [["", "Any"]].concat(dataYears.map(y => [String(y), String(y)]));
+  const monthOpts = [["", "All months"]].concat(dataMonths.map(m => [String(m), MONTH_NAMES[m - 1] + " (" + m + ")"]));
+  const monthsValue = Array.isArray(block.filters.months) ? String(block.filters.months[0] || "") : String(block.filters.months || "");
   pGrid.appendChild(tableControlWrap("Traces", tableControlSelect("traces", [["visible", "Currently visible"], ["ensemble", "Ensemble only"], ["all", "All traces"]], block.filters.traces)));
-  pGrid.appendChild(tableControlWrap("Year from", tableControlInput("yearFrom", block.filters.yearFrom)));
-  pGrid.appendChild(tableControlWrap("Year to", tableControlInput("yearTo", block.filters.yearTo)));
-  pGrid.appendChild(tableControlWrap("Months (e.g. 10,11,12)", tableControlInput("months", Array.isArray(block.filters.months) ? block.filters.months.join(",") : (block.filters.months || ""))));
+  pGrid.appendChild(tableControlWrap("Year from", tableControlSelect("yearFrom", yearOpts, block.filters.yearFrom)));
+  pGrid.appendChild(tableControlWrap("Year to", tableControlSelect("yearTo", yearOpts, block.filters.yearTo)));
+  pGrid.appendChild(tableControlWrap("Months", tableControlSelect("months", monthOpts, monthsValue)));
   const totalsRow = document.createElement("div");
   totalsRow.className = "check-row";
   totalsRow.style.gridColumn = "1 / -1";
@@ -6874,6 +6886,8 @@ function renderTableBlock(section, rawBlock) {
   for (const tr of traces) {
     const label = model.labels.get(tr.traceNumber) || traceLabel(tr.traceNumber);
     const th = document.createElement("th");
+    th.dataset.trace = String(tr.traceNumber);
+    th.title = "Click to highlight this trace in every chart";
     th.textContent = label + " (" + tr.traceNumber + ")";
     if (highlightedTrace === tr.traceNumber) th.classList.add("dt-hl");
     hr.appendChild(th);
@@ -6886,6 +6900,14 @@ function renderTableBlock(section, rawBlock) {
   }
   thead.appendChild(hr);
   table.appendChild(thead);
+  thead.addEventListener("click", e => {
+    const th = e.target.closest("th[data-trace]");
+    if (!th) return;
+    const tn = parseInt(th.dataset.trace, 10);
+    highlightedTrace = highlightedTrace === tn ? null : tn;
+    renderTableBlock(section, section._block);
+    refreshHighlight();
+  });
 
   // row year helpers — monthly rows sit in a calendar year; their water year
   // is rowYear + 1 when the month is Oct-Dec
@@ -6907,6 +6929,7 @@ function renderTableBlock(section, rawBlock) {
     if (kept && !kept.years.has(Number(g.sortKey))) continue;  // value conditions also filter rows
     const meta = rowMeta(g);
     const rowEl = document.createElement("tr");
+    rowEl.title = "Click to highlight this period row";
     const td0 = document.createElement("td");
     td0.className = "period";
     td0.textContent = g.label;
@@ -6934,6 +6957,16 @@ function renderTableBlock(section, rawBlock) {
   }
   table.appendChild(tbody);
   scroll.appendChild(table);
+
+  // row click -> visual row selection (period cell only; value cells stay
+  // reserved for trace highlighting)
+  tbody.addEventListener("click", e => {
+    const periodCell = e.target.closest("td.period");
+    if (!periodCell) return;
+    const rowEl = periodCell.parentElement;
+    rowEl.classList.toggle("row-selected");
+    [...tbody.children].forEach(r => { if (r !== rowEl) r.classList.remove("row-selected"); });
+  });
 
   // actions: copy + CSV
   const actionsBar = document.createElement("div");
@@ -7287,6 +7320,17 @@ function buildDataTableGroup(slotData, traces, headingName, highlightTrace) {
     tbody.appendChild(rowEl);
   }
   table.appendChild(tbody);
+
+  // row click -> visual row selection (period cell; value cells handle trace
+  // highlighting via the #dtTables delegation)
+  tbody.addEventListener("click", e => {
+    const periodCell = e.target.closest("td.period");
+    if (!periodCell) return;
+    const rowEl = periodCell.parentElement;
+    rowEl.classList.toggle("row-selected");
+    [...tbody.children].forEach(r => { if (r !== rowEl) r.classList.remove("row-selected"); });
+  });
+
   scroll.appendChild(table);
   wrap.appendChild(scroll);
   return wrap;
