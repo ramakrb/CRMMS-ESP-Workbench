@@ -272,6 +272,25 @@
     stroke-width: 0 !important;
   }
 
+  /* per-card scatter data table (App's renderScatterDataTables) */
+  .mini-button {
+    font: 600 10px "Segoe UI", Tahoma, sans-serif;
+    color: var(--ink-soft); background: #fff;
+    border: 1px solid var(--line); border-radius: 7px;
+    padding: 5px 9px; cursor: pointer;
+  }
+  .mini-button:hover { border-color: var(--accent); color: var(--accent); }
+  .scatter-data-details { margin: 8px 0 2px; border-top: 1px solid var(--line-soft); padding-top: 7px; }
+  .scatter-data-details > summary { cursor: pointer; color: var(--ink-soft); font-size: 11px; font-weight: 800; }
+  .scatter-data-actions { display: flex; align-items: center; gap: 7px; padding: 8px 0; }
+  .scatter-copy-status { color: var(--ink-faint); font-size: 10px; }
+  .scatter-points-table th button {
+    border: 0; background: transparent; color: inherit;
+    font: inherit; font-weight: 800; cursor: pointer; padding: 0;
+  }
+  .scatter-points-table th button:hover { text-decoration: underline; }
+  .scatter-empty-note { color: var(--ink-faint); font-size: 11.5px; padding: 4px 0; }
+
   /* linked highlight hint */
   #highlightInfo {
     display: none;
@@ -6084,6 +6103,12 @@ function drawPlot(cardEl, item, preset) {
   Plotly.react(plotDiv, traces, layout, PLOTLY_CONFIG);
   attachPlotClick(plotDiv);
   showPlotNote(cardEl, plotNoteFor(item, traces));
+  if (item.plot_type === "scatter") {
+    renderScatterDataTable(cardEl, item);
+  } else {
+    const staleHost = cardEl.querySelector(".scatter-data-host");
+    if (staleHost) staleHost.remove();
+  }
 }
 
 /* Zero-height bars and empty selections look like "nothing plotted" — show an
@@ -6509,7 +6534,12 @@ function renderDataTable() {
   }
 
   const onlyVisible = document.getElementById("dtOnlyVisible").checked;
-  const traces = onlyVisible ? tracesForSlot(slotData) : slotData.traces;
+  let traces = onlyVisible ? tracesForSlot(slotData) : slotData.traces;
+  // App behavior: a selected (highlighted) trace filters the table to just
+  // that trace's data column
+  if (highlightedTrace != null) {
+    traces = traces.filter(tr => tr.traceNumber === highlightedTrace);
+  }
 
   const rowMap = new Map();
   for (const tr of traces) {
@@ -6563,7 +6593,158 @@ function renderDataTable() {
   table.appendChild(tbody);
 
   info.textContent = traces.length + " traces \u00d7 " + rows.length + " periods" +
-    (slotData.unit ? " \u00b7 unit: " + slotData.unit : "");
+    (slotData.unit ? " \u00b7 unit: " + slotData.unit : "") +
+    (highlightedTrace != null ? " \u00b7 showing highlighted trace only" : "");
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ---- per-scatter-card data table (App's renderScatterDataTables) ---- */
+
+function renderScatterDataTable(cardEl, item) {
+  let host = cardEl.querySelector(".scatter-data-host");
+  if (!host) {
+    host = document.createElement("div");
+    host.className = "scatter-data-host";
+    cardEl.appendChild(host);
+  }
+  const div = cardEl.querySelector(".plot-area");
+  const rows = [];
+  if (div.data) {
+    for (const trace of div.data) {
+      if (trace.mode !== "markers" || !Array.isArray(trace.x) || !trace.x.length || !Array.isArray(trace.y) || !trace.y.length) continue;
+      const meta = Array.isArray(trace.customdata && trace.customdata[0]) ? trace.customdata[0] : [];
+      const tn = Number(meta[2]);
+      if (!Number.isFinite(tn)) continue;
+      if (highlightedTrace != null && tn !== highlightedTrace) continue;
+      const label = (model && model.labels.get(tn)) || traceLabel(tn);
+      rows.push({ trace: label + " (" + tn + ")", tn: tn, x: trace.x[0], y: trace.y[0] });
+    }
+  }
+
+  const xTitle = item.slot;
+  const yTitle = item.y_slot || "Y slot";
+  const fmt = v => (v == null || v === "" || !Number.isFinite(Number(v))) ? "\u2014"
+    : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (!rows.length) {
+    host.innerHTML = '<div class="scatter-data-details"><div class="scatter-empty-note">No paired data points are available for the selected treatments/year.</div></div>';
+    return;
+  }
+
+  const serialize = delimiter => {
+    const lines = [["Trace", xTitle, yTitle]];
+    for (const r of rows) lines.push([r.trace, String(r.x), String(r.y)]);
+    return lines.map(row => row.map(cell => {
+      const text = String(cell == null ? "" : cell);
+      return delimiter === "," ? '"' + text.replaceAll('"', '""') + '"' : text.replaceAll("\t", " ");
+    }).join(delimiter)).join("\r\n");
+  };
+
+  host.innerHTML = "";
+  const detailsEl = document.createElement("details");
+  detailsEl.className = "scatter-data-details";
+  const summary = document.createElement("summary");
+  summary.textContent = "Data used in this plot (" + rows.length + " points)";
+  detailsEl.appendChild(summary);
+
+  const actions = document.createElement("div");
+  actions.className = "scatter-data-actions";
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button"; copyBtn.className = "mini-button"; copyBtn.textContent = "Copy for Excel";
+  const csvBtn = document.createElement("button");
+  csvBtn.type = "button"; csvBtn.className = "mini-button"; csvBtn.textContent = "Download CSV";
+  const status = document.createElement("span");
+  status.className = "scatter-copy-status";
+  actions.appendChild(copyBtn); actions.appendChild(csvBtn); actions.appendChild(status);
+  detailsEl.appendChild(actions);
+
+  const cols = [{ key: "trace", label: "Trace" }, { key: "x", label: xTitle }, { key: "y", label: yTitle }];
+  const scroll = document.createElement("div");
+  scroll.className = "dt-scroll";
+  scroll.style.maxHeight = "260px";
+  const table = document.createElement("table");
+  table.className = "scatter-points-table";
+
+  const sortState = { key: null, direction: "asc" };
+  const sortedRows = () => {
+    if (!sortState.key) return rows;
+    const sorted = [...rows].sort((a, b) => {
+      const av = a[sortState.key], bv = b[sortState.key];
+      const an = Number(av), bn = Number(bv);
+      const cmp = Number.isFinite(an) && Number.isFinite(bn) ? an - bn
+        : String(av == null ? "" : av).localeCompare(String(bv == null ? "" : bv), undefined, { numeric: true, sensitivity: "base" });
+      return sortState.direction === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  };
+
+  const thead = document.createElement("thead");
+  const hr = document.createElement("tr");
+  for (const col of cols) {
+    const th = document.createElement("th");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = col.label;
+    btn.addEventListener("click", () => {
+      const direction = sortState.key === col.key && sortState.direction === "asc" ? "desc" : "asc";
+      sortState.key = col.key;
+      sortState.direction = direction;
+      fillBody();
+    });
+    th.appendChild(btn);
+    hr.appendChild(th);
+  }
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  table.appendChild(tbody);
+  const fillBody = () => {
+    tbody.innerHTML = "";
+    for (const r of sortedRows()) {
+      const tr = document.createElement("tr");
+      for (const col of cols) {
+        const td = document.createElement("td");
+        td.textContent = col.key === "trace" ? r.trace : fmt(r[col.key]);
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  };
+  fillBody();
+  scroll.appendChild(table);
+  detailsEl.appendChild(scroll);
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(serialize("\t"));
+      status.textContent = "Copied; paste into Excel.";
+    } catch (err) {
+      const textarea = document.createElement("textarea");
+      textarea.value = serialize("\t");
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      status.textContent = copied ? "Copied; paste into Excel." : "Copy failed.";
+    }
+    setTimeout(() => { status.textContent = ""; }, 4000);
+  });
+  csvBtn.addEventListener("click", () => {
+    const name = String(item.slot + "-vs-" + (item.y_slot || "scatter")).replace(/[^A-Za-z0-9_.-]+/g, "_");
+    downloadBlob(new Blob([serialize(",")], { type: "text/csv;charset=utf-8" }), name + ".csv");
+  });
+
+  host.appendChild(detailsEl);
 }
 
 /* ---- printable report (serverless counterpart of the App's Report Builder:
