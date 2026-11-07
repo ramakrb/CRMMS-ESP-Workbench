@@ -28,7 +28,8 @@ custom table presets without hand-editing JSON:
    markers and downloads the updated file — replace your repo copy, review the
    diff, then commit and push.
 
-The published viewer page stays view-only for end users.
+The published viewer page stays view-only for end users. Detailed builder documentation lives in `docs/preset-builder-guide.md`
+(local-only, not published).
 
 ---
 

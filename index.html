@@ -59,6 +59,16 @@
     padding: 3px 12px;
     width: fit-content;
   }
+  .docs-link {
+    display: inline-block;
+    margin: 8px 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .docs-link:hover { color: #116366; }
   .wrap { max-width: 1220px; margin: 0 auto; padding: 0 22px; }
 
   #statusPanel { margin-top: 14px; }
@@ -454,6 +464,7 @@
     <h1 id="pageTitle">CRMMS ESP Preset Plots</h1>
     <div class="tagline">Standalone viewer for RiverWare RDF output &middot; renders the CRMMS Explorer preset plots &middot; no server required</div>
     <div id="runDateBadge" class="run-badge"></div>
+    <a id="docsLink" class="docs-link" href="#" target="_blank" rel="noopener">User guide</a>
   </div>
 </header>
 
@@ -4453,6 +4464,10 @@ const RDF_FILES = [
 /* Optional: page title shown in the header. */
 const PAGE_TITLE = "CRMMS ESP Preset Plots";
 
+/* Optional: link to the user guide shown in the header. Point it at the
+ * rendered markdown on GitHub (or any URL). Empty string hides the link. */
+const DOCS_URL = "https://github.com/ramakrb/CRMMS-ESP-Workbench/blob/main/docs/viewer-guide.md";
+
 /* Optional: which preset to show first (id from explorer_presets.json).
  * Empty string = the first preset below. */
 const DEFAULT_PRESET = "";
@@ -4835,6 +4850,11 @@ if (window.__EXTRA_TABLE_PRESETS__) TABLE_PRESETS.push(...window.__EXTRA_TABLE_P
 if (PAGE_TITLE) {
   document.title = PAGE_TITLE;
   document.getElementById("pageTitle").textContent = PAGE_TITLE;
+}
+if (DOCS_URL) {
+  document.getElementById("docsLink").href = DOCS_URL;
+} else {
+  document.getElementById("docsLink").style.display = "none";
 }
 
 /* PARSER:START */
