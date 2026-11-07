@@ -185,6 +185,17 @@
   .card-head .card-controls { flex: 1; min-width: 0; }
   .card-head summary { font-size: 11.5px; font-weight: 600; color: var(--ink-faint); }
   .card-head summary:hover { color: var(--accent); }
+  .card-year {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--ink-faint);
+    margin-left: auto; margin-right: 8px;
+    white-space: nowrap;
+  }
+  .card-year select {
+    font-family: inherit; font-size: 11.5px; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 2px 5px; background: #fff;
+  }
   .card-remove {
     flex: none; margin-left: 10px;
     font-family: inherit; font-size: 11px; font-weight: 600;
@@ -5572,6 +5583,64 @@ function buildBoxTraces(item, slotData, unit) {
   return { traces: traces, traceCount: series.length };
 }
 
+/* ---- on-plot year selector ----------------------------------------------
+ * For bar / stacked-bar / scatter plots that filter by a single year
+ * (water-year or calendar-year sum), the year lives on the card as a
+ * dropdown populated with the years present in the data. */
+
+const SUM_TRANSFORMS = ["water_year_sum", "calendar_year_sum"];
+
+function collectSumYears(slotData, transform, years) {
+  if (!slotData) return;
+  for (const tr of tracesForSlot(slotData)) {
+    for (const p of transformTracePoints(tr.points, transform)) {
+      if (p.year != null) years.add(p.year);
+    }
+  }
+}
+
+function yearOptionsFor(item) {
+  if (!model) return null;
+  if (item.plot_type === "bar" || item.plot_type === "stacked_bar") {
+    if (!SUM_TRANSFORMS.includes(item.transform)) return null;
+    const years = new Set();
+    collectSumYears(model.slots.get(item.slot), item.transform, years);
+    return years.size ? [...years].sort((a, b) => a - b) : null;
+  }
+  if (item.plot_type === "scatter") {
+    const xSum = SUM_TRANSFORMS.includes(item.scatter_x_transform);
+    const ySum = SUM_TRANSFORMS.includes(item.scatter_y_transform);
+    if (!xSum && !ySum) return null;
+    const xYears = new Set(), yYears = new Set();
+    if (xSum) collectSumYears(model.slots.get(item.slot), item.scatter_x_transform, xYears);
+    if (ySum) collectSumYears(model.slots.get(item.y_slot), item.scatter_y_transform, yYears);
+    let years;
+    if (xYears.size && yYears.size) {
+      years = [...xYears].filter(y => yYears.has(y));  // years both axes can show
+    } else {
+      years = [...(xYears.size ? xYears : yYears)];
+    }
+    return years.length ? years.sort((a, b) => a - b) : null;
+  }
+  return null;
+}
+
+function yearFieldName(plotType) {
+  return plotType === "scatter" ? "scatter_year" : "annual_year";
+}
+
+function applyCardYearChange(cardEl, preset, value) {
+  const field = yearFieldName(cardEl._item.plot_type);
+  const ui = presetUi(preset);
+  const override = Object.assign({}, ui.overrides[cardEl._itemId] || {});
+  override[field] = value;
+  ui.overrides[cardEl._itemId] = override;
+  saveUiState();
+  cardEl._rawItem[field] = value;
+  cardEl._item = normalizeItem(Object.assign({}, cardEl._rawItem));
+  drawPlot(cardEl, cardEl._item, preset);
+}
+
 /* =========================================================================
  * Chart controls — per-plot settings, trace visibility, layout overrides.
  * Adjustments are persisted to localStorage per preset and can be undone
@@ -5740,7 +5809,6 @@ function buildCardControls(cardEl, details, item, preset, slotNames) {
     panel.appendChild(select("Y transform", TRANSFORM_OPTIONS, item.scatter_y_transform, "scatter_y_transform"));
     panel.appendChild(select("X basis", BASIS_OPTIONS, item.scatter_x_basis, "scatter_x_basis"));
     panel.appendChild(select("Y basis", BASIS_OPTIONS, item.scatter_y_basis, "scatter_y_basis"));
-    panel.appendChild(text("Year filter (e.g. 2027; empty = all)", item.scatter_year, "scatter_year"));
   } else if (item.plot_type === "stacked_bar") {
     panel.appendChild(select("Transform", TRANSFORM_OPTIONS, item.transform, "transform"));
     const components = [item.slot, ...item.plot_slots].filter((v, i, a) => v && a.indexOf(v) === i);
@@ -5749,11 +5817,9 @@ function buildCardControls(cardEl, details, item, preset, slotNames) {
     panel.appendChild(select("Sort traces by slot", sortOptions, item.stacked_sort_slot, "stacked_sort_slot"));
     panel.appendChild(select("Bar sort", BARSORT_OPTIONS, item.bar_sort, "bar_sort"));
     panel.appendChild(select("Legend position", LEGENDPOS_OPTIONS, item.stacked_legend_position, "stacked_legend_position"));
-    panel.appendChild(text("Annual year (empty = latest)", item.annual_year, "annual_year"));
   } else if (item.plot_type === "bar") {
     panel.appendChild(select("Transform", TRANSFORM_OPTIONS, item.transform, "transform"));
     panel.appendChild(select("Bar sort", BARSORT_OPTIONS, item.bar_sort, "bar_sort"));
-    panel.appendChild(text("Annual year (empty = latest)", item.annual_year, "annual_year"));
   } else if (item.plot_type === "box") {
     panel.appendChild(select("Transform", TRANSFORM_OPTIONS, item.transform, "transform"));
     panel.appendChild(checkbox("Light trace lines behind boxes", item.box_line_overlay, "box_line_overlay"));
@@ -5804,11 +5870,21 @@ function applyCardChanges(cardEl, preset) {
   const prev = cardEl._item;
   const patch = readCardControls(cardEl);
   const ui = presetUi(preset);
-  ui.overrides[cardEl._itemId] = patch;
+  const prevOverride = ui.overrides[cardEl._itemId] || {};
+  // the year lives on the card's Year dropdown, not in the settings panel —
+  // carry the current year through panel edits so it is not dropped
+  const carried = {};
+  if (prevOverride.annual_year != null) carried.annual_year = prevOverride.annual_year;
+  if (prevOverride.scatter_year != null) carried.scatter_year = prevOverride.scatter_year;
+  ui.overrides[cardEl._itemId] = Object.assign({}, carried, patch);
   saveUiState();
   const effRaw = Object.assign({}, cardEl._rawItem, patch);
   const eff = normalizeItem(effRaw);
-  if (patch.plot_type !== prev.plot_type || patch.x_range_mode !== prev.x_range_mode) {
+  const structural = patch.plot_type !== prev.plot_type || patch.x_range_mode !== prev.x_range_mode ||
+    patch.transform !== prev.transform ||
+    patch.scatter_x_transform !== prev.scatter_x_transform ||
+    patch.scatter_y_transform !== prev.scatter_y_transform;
+  if (structural) {
     renderPlotCard(cardEl, effRaw, preset);  // rebuild the controls panel too
   } else {
     cardEl._item = eff;
@@ -5966,6 +6042,37 @@ function renderPlotCard(cardEl, rawItem, preset) {
   summary.textContent = "Plot settings";
   details.appendChild(summary);
   head.appendChild(details);
+
+  // on-plot year selector for year-sum bar/stacked/scatter plots
+  const yearOptions = missing.length ? null : yearOptionsFor(item);
+  if (yearOptions) {
+    const isScatter = item.plot_type === "scatter";
+    const current = isScatter ? item.scatter_year : item.annual_year;
+    const yearLabel = document.createElement("label");
+    yearLabel.className = "card-year";
+    yearLabel.title = "Year used by this plot's water-year/calendar-year sum";
+    const yearSpan = document.createElement("span");
+    yearSpan.textContent = "Year";
+    const yearSel = document.createElement("select");
+    const defaultOpt = document.createElement("option");
+    defaultOpt.value = "";
+    defaultOpt.textContent = isScatter ? "Default (first year)" : "Latest year";
+    yearSel.appendChild(defaultOpt);
+    for (const y of yearOptions) {
+      const o = document.createElement("option");
+      o.value = String(y);
+      o.textContent = (!isScatter && item.transform === "water_year_sum") ? "WY " + y : String(y);
+      yearSel.appendChild(o);
+    }
+    yearSel.value = String(current);
+    if (yearSel.selectedIndex < 0) yearSel.value = "";  // preset year not in this data
+    yearSel.addEventListener("change", () => applyCardYearChange(cardEl, preset, yearSel.value));
+    yearLabel.appendChild(yearSpan);
+    yearLabel.appendChild(yearSel);
+    head.appendChild(yearLabel);
+    cardEl._yearSelect = yearSel;
+  }
+
   const removeBtn = document.createElement("button");
   removeBtn.type = "button";
   removeBtn.className = "card-remove";
