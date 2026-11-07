@@ -118,6 +118,49 @@
   }
   #presetBar button:hover { border-color: var(--accent); color: var(--accent); }
   #presetBar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #tablePresetBar {
+    display: none;
+    margin: 0 0 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  #tablePresetBar .bar-label {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ink-faint);
+    margin-right: 2px;
+  }
+  #tablePresetBar button {
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  #tablePresetBar button:hover { border-color: var(--accent); color: var(--accent); }
+  #tablePresetBar button.active { background: var(--navy, #0b3144); border-color: var(--navy, #0b3144); color: #fff; }
+
+  /* custom table blocks */
+  .table-block {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+  .table-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+  .table-block-head strong { font-size: 14px; color: var(--ink); }
+  .table-block-head .table-block-sub { font-size: 11px; color: var(--ink-faint); }
+  .table-block .dt-scroll { border-radius: 8px; }
+  .total-col { background: #f6f9fa; color: var(--ink-soft); }
   #presetBar .preset-desc {
     flex-basis: 100%;
     font-size: 11.5px;
@@ -426,6 +469,7 @@
   </div>
 
   <nav id="presetBar"></nav>
+  <nav id="tablePresetBar"></nav>
 
   <div id="chartToolbar">
     <details id="traceControl">
@@ -4417,6 +4461,7 @@ const DEFAULT_PRESET = "";
  * Preset plot definitions — verbatim plot_presets from explorer_presets.json
  * (CRMMS ESP Compare & Report Builder). Edit/extend to add your own.
  * ========================================================================= */
+/* PRESETS:START */
 const PRESETS = [
   {
     "id": "powell-mead-elevations",
@@ -4702,6 +4747,88 @@ const PRESETS = [
   }
 ];
 if (window.__EXTRA_PRESETS__) PRESETS.push(...window.__EXTRA_PRESETS__);
+/* PRESETS:END */
+
+/* TABLE_PRESETS:START */
+const TABLE_PRESETS = [
+  {
+    "id": "powell-elevation-tables",
+    "name": "Powell Pool Elevation Tables",
+    "description": "Monthly values with WY totals, plus end-of-September elevation by water year",
+    "tables": [
+      {
+        "slot": "Powell.Pool Elevation",
+        "rows": "monthly",
+        "stat": "sum",
+        "wyTotals": true,
+        "cyTotals": false,
+        "title": "Monthly Pool Elevation",
+        "decimals": 2,
+        "filters": {
+          "traces": "visible",
+          "yearFrom": "",
+          "yearTo": "",
+          "months": [],
+          "conditions": [],
+          "logic": "all"
+        }
+      },
+      {
+        "slot": "Powell.Pool Elevation",
+        "rows": "water_year",
+        "stat": "end",
+        "wyTotals": false,
+        "cyTotals": false,
+        "title": "End-of-September Elevation by Water Year",
+        "decimals": 2,
+        "filters": {
+          "traces": "visible",
+          "yearFrom": "",
+          "yearTo": "",
+          "months": [],
+          "conditions": [],
+          "logic": "all"
+        }
+      }
+    ]
+  },
+  {
+    "id": "inflow-wy-conditions",
+    "name": "CY Inflow (Low Outflow Years)",
+    "description": "Calendar-year inflow sums, keeping only traces whose Powell.Inflow WY sum is below 9,500,000",
+    "tables": [
+      {
+        "slot": "Powell.Inflow",
+        "rows": "calendar_year",
+        "stat": "sum",
+        "wyTotals": false,
+        "cyTotals": false,
+        "title": "CY Inflow Sum",
+        "decimals": 0,
+        "filters": {
+          "traces": "visible",
+          "yearFrom": "",
+          "yearTo": "",
+          "months": [],
+          "logic": "all",
+          "conditions": [
+            {
+              "slot": "Powell.Inflow",
+              "calculation": "water_sum",
+              "op": "<",
+              "value": "9500000",
+              "value2": "",
+              "month": "0",
+              "years": "2024, 2025, 2026, 2027, 2028"
+            }
+          ]
+        }
+      }
+    ]
+  }
+];
+if (window.__EXTRA_TABLE_PRESETS__) TABLE_PRESETS.push(...window.__EXTRA_TABLE_PRESETS__);
+/* TABLE_PRESETS:END */
 
 /* ===================== end of configuration ============================= */
 
@@ -4710,6 +4837,7 @@ if (PAGE_TITLE) {
   document.getElementById("pageTitle").textContent = PAGE_TITLE;
 }
 
+/* PARSER:START */
 /* =========================================================================
  * RDF parsing — JavaScript port of rdf_reader.py (RWDataPlyr 0.6.6 format)
  * ========================================================================= */
@@ -4901,12 +5029,6 @@ function parseRdf(text, sourceName) {
   return { name: sourceName, meta: meta, slots: slots, runCount: runIndex };
 }
 
-/* =========================================================================
- * Multi-file merge — mirrors main.py _build_explorer_payload dedupe rules:
- * duplicates keyed by (trace, timestep string) must agree; conflicting
- * values are reported; first occurrence wins.
- * ========================================================================= */
-
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
 
@@ -4945,6 +5067,14 @@ function traceLabel(traceNumber) {
   if (CRMMS_ESP_MAPPING[traceNumber] != null) return String(CRMMS_ESP_MAPPING[traceNumber]);
   return "Trace " + traceNumber;
 }
+
+/* PARSER:END */
+
+/* =========================================================================
+ * Multi-file merge — mirrors main.py _build_explorer_payload dedupe rules:
+ * duplicates keyed by (trace, timestep string) must agree; conflicting
+ * values are reported; first occurrence wins.
+ * ========================================================================= */
 
 function classifyTraces(traceNumbers) {
   // main.py _explorer_trace_defaults: last 30 traces are the ESP ensemble;
@@ -6341,11 +6471,429 @@ function selectPreset(idx) {
   currentPreset = PRESETS[idx];
   const bar = document.getElementById("presetBar");
   bar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.idx === String(idx)));
+  const tableBar = document.getElementById("tablePresetBar");
+  if (tableBar) tableBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
   renderPreset(currentPreset);
   if (model && document.getElementById("dtSlot").options.length) {
     document.getElementById("dtSlot").value = defaultDataTableSlot();
     renderDataTable();
   }
+}
+
+/* =========================================================================
+ * Custom table presets — monthly / water-year / calendar-year / annual
+ * tables with trace, year-range, month and value-condition filters
+ * (value conditions mirror the App's analysis-preset vocabulary).
+ * ========================================================================= */
+
+const TABLE_ROWS_LABELS = {
+  monthly: "Monthly values",
+  water_year: "Water-year aggregation (Oct\u2013Sep)",
+  calendar_year: "Calendar-year aggregation",
+  annual: "Annual values",
+};
+
+function normalizeTableBlock(block) {
+  const b = Object.assign({}, block);
+  b.rows = ["monthly", "water_year", "calendar_year", "annual"].indexOf(b.rows) >= 0 ? b.rows : "monthly";
+  b.stat = ["sum", "avg", "min", "max", "end"].indexOf(b.stat) >= 0 ? b.stat : "sum";
+  b.filters = Object.assign({ traces: "visible", yearFrom: "", yearTo: "", months: [], conditions: [], logic: "all" }, b.filters || {});
+  b.filters.months = Array.isArray(b.filters.months) ? b.filters.months.map(Number).filter(m => m >= 1 && m <= 12) : [];
+  b.filters.conditions = Array.isArray(b.filters.conditions) ? b.filters.conditions : [];
+  b.filters.logic = b.filters.logic === "any" ? "any" : "all";
+  b.wyTotals = !!b.wyTotals;
+  b.cyTotals = !!b.cyTotals;
+  b.decimals = Number.isFinite(Number(b.decimals)) ? Number(b.decimals) : 2;
+  b.title = b.title || "";
+  return b;
+}
+
+function tableTracesForBlock(block, slotData) {
+  const mode = block.filters.traces || "visible";
+  let traces;
+  if (mode === "all") traces = slotData.traces;
+  else if (mode === "ensemble") traces = slotData.traces.filter(tr => model.roles.get(tr.traceNumber) === "ensemble");
+  else traces = tracesForSlot(slotData);
+  return traces;
+}
+
+function valuePass(v, cond) {
+  const op = cond.op || "any";
+  if (op === "any") return true;
+  const value = Number(cond.value);
+  if (op === "between") {
+    const a = Number(cond.value), b = Number(cond.value2);
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    return Number.isFinite(v) && v >= lo && v <= hi;
+  }
+  if (!Number.isFinite(value)) return true;
+  switch (op) {
+    case "<": return Number.isFinite(v) && v < value;
+    case "<=": return Number.isFinite(v) && v <= value;
+    case ">": return Number.isFinite(v) && v > value;
+    case ">=": return Number.isFinite(v) && v >= value;
+    case "=": return Number.isFinite(v) && v === value;
+    case "!=": return !(Number.isFinite(v) && v === value);
+    default: return true;
+  }
+}
+
+function parseYearsList(text) {
+  return String(text || "").split(/[ ,;]+/).map(s => parseInt(s, 10)).filter(n => Number.isFinite(n));
+}
+
+function groupValuesByBasis(points, basis, years) {
+  const groups = new Map();  // year -> ordered values
+  for (const p of points) {
+    if (p.value == null || !Number.isFinite(p.value)) continue;
+    const y = basis === "water" ? p.year + ((p.month != null && p.month >= WY_START_MONTH) ? 1 : 0) : p.year;
+    if (years.length && !years.includes(y)) continue;
+    if (!groups.has(y)) groups.set(y, []);
+    groups.get(y).push(p.value);
+  }
+  return groups;
+}
+
+/* Evaluate value conditions — mirrors the App's analysis-preset semantics:
+ * the result is a set of trace::year pairs; the table keeps the matching
+ * trace columns and matching year rows. Returns null when there are no
+ * conditions. */
+function evaluateTableConditions(conditions, logic) {
+  if (!conditions || !conditions.length) return null;
+  const pairSets = [];
+  for (const cond of conditions) {
+    if (!cond || !cond.slot) continue;
+    const slotData = model.slots.get(cond.slot);
+    if (!slotData) continue;
+    const calc = cond.calculation || "individual";
+    const years = parseYearsList(cond.years);
+    const pairs = new Set();
+    for (const tr of slotData.traces) {
+      if (model.roles.get(tr.traceNumber) === "deterministic") continue;  // App: Max/Min/Most excluded
+      if (calc === "individual") {
+        for (const p of tr.points) {
+          if (cond.month && Number(cond.month) > 0 && p.month !== Number(cond.month)) continue;
+          if (years.length && !years.includes(p.year)) continue;
+          if (valuePass(p.value, cond)) pairs.add(tr.traceNumber + "::" + p.year);
+        }
+      } else {
+        const basis = calc.startsWith("water") ? "water" : "calendar";
+        const statName = calc.split("_")[1] || "sum";
+        const groups = groupValuesByBasis(tr.points, basis, years);
+        for (const [y, vals] of groups) {
+          if (valuePass(statApply(statName, vals), cond)) pairs.add(tr.traceNumber + "::" + y);
+        }
+      }
+    }
+    pairSets.push(pairs);
+  }
+  if (!pairSets.length) return null;
+  const merged = logic === "any"
+    ? new Set(pairSets.flatMap(s => [...s]))
+    : new Set(pairSets.reduce((acc, s) => acc.filter(p => s.has(p)), [...pairSets[0]]));
+  const traces = new Set(), yrs = new Set();
+  for (const pair of merged) {
+    const [tn, y] = pair.split("::");
+    traces.add(Number(tn));
+    yrs.add(Number(y));
+  }
+  return { pairs: merged, traces: traces, years: yrs };
+}
+
+function statApply(stat, values) {
+  const vals = values.filter(v => Number.isFinite(v));
+  if (!vals.length) return null;
+  switch (stat) {
+    case "avg": return vals.reduce((a, b) => a + b, 0) / vals.length;
+    case "min": return Math.min(...vals);
+    case "max": return Math.max(...vals);
+    case "end": return vals[vals.length - 1];
+    default: return vals.reduce((a, b) => a + b, 0);  // sum
+  }
+}
+
+/* Build the row groups for a table block:
+ * [{key, label, sortKey, values: Map(traceNumber -> number), count}] */
+function tableRowGroups(slotData, block, traces) {
+  const groups = new Map();
+  const rowsMode = block.rows === "annual" && slotData.timestepType !== "annual" ? "calendar_year" : block.rows;
+
+  const ensure = key => {
+    let g = groups.get(key);
+    if (!g) { g = { key: key, label: key, values: new Map() }; groups.set(key, g); }
+    return g;
+  };
+
+  if (rowsMode === "monthly") {
+    for (const tr of traces) {
+      for (const p of tr.points) {
+        if (p.value == null || !Number.isFinite(p.value)) continue;
+        if (block.filters.yearFrom !== "" && block.filters.yearFrom != null && p.year < Number(block.filters.yearFrom)) continue;
+        if (block.filters.yearTo !== "" && block.filters.yearTo != null && p.year > Number(block.filters.yearTo)) continue;
+        if (block.filters.months.length && !block.filters.months.includes(p.month)) continue;
+        const key = p.periodDate || p.timestep || String(p.idx);
+        const g = ensure(key);
+        g.label = periodLabel(p);
+        g.sortKey = key;
+        if (!g.values.has(tr.traceNumber)) g.values.set(tr.traceNumber, []);
+        g.values.get(tr.traceNumber).push(p.value);
+      }
+    }
+  } else {
+    const basis = rowsMode === "water_year" ? "water" : "calendar";
+    for (const tr of traces) {
+      for (const p of tr.points) {
+        if (p.value == null || !Number.isFinite(p.value)) continue;
+        const y = basis === "water" ? p.year + ((p.month != null && p.month >= WY_START_MONTH) ? 1 : 0) : p.year;
+        if (block.filters.yearFrom !== "" && block.filters.yearFrom != null && y < Number(block.filters.yearFrom)) continue;
+        if (block.filters.yearTo !== "" && block.filters.yearTo != null && y > Number(block.filters.yearTo)) continue;
+        const g = ensure(String(y));
+        g.label = rowsMode === "water_year" ? "WY " + y : String(y);
+        g.sortKey = y;
+        if (!g.values.has(tr.traceNumber)) g.values.set(tr.traceNumber, []);
+        g.values.get(tr.traceNumber).push(p.value);
+      }
+    }
+  }
+
+  const list = [...groups.values()];
+  list.sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey), undefined, { numeric: true }));
+  // NOTE: values stay in period order (points are pre-sorted) — required for the "end" statistic
+  return { rowsMode: rowsMode, groups: list };
+}
+
+const TABLE_STAT_LABELS = { sum: "Sum", avg: "Average", min: "Minimum", max: "Maximum", end: "End of period" };
+
+function renderTableBlock(section, rawBlock) {
+  const block = normalizeTableBlock(rawBlock);
+  const head = document.createElement("div");
+  head.className = "table-block-head";
+  section.appendChild(head);
+
+  const slotData = model.slots.get(block.slot);
+  if (!slotData) {
+    head.innerHTML = "<strong>" + escapeHtml(block.title || block.slot) + "</strong>" +
+      '<span class="table-block-sub"><span class="warn-line">Slot not found in the loaded RDF files: <code>' + escapeHtml(block.slot) + "</code></span></span>";
+    return;
+  }
+
+  // trace columns: block filter + value conditions (trace::year pairs —
+  // matching trace columns AND matching year rows are kept)
+  let traces = tableTracesForBlock(block, slotData);
+  const kept = evaluateTableConditions(block.filters.conditions, block.filters.logic);
+  if (kept) traces = traces.filter(tr => kept.traces.has(tr.traceNumber));
+  traces = [...traces].sort((a, b) => a.traceNumber - b.traceNumber);
+
+  const unit = slotData.unit || "Value";
+  const statText = block.rows === "monthly" ? "" : " \u00b7 " + (TABLE_STAT_LABELS[block.stat] || block.stat);
+  head.innerHTML =
+    "<strong>" + escapeHtml(block.title || block.slot) + "</strong>" +
+    '<span class="table-block-sub">' + escapeHtml(block.slot) + " \u00b7 " +
+    (TABLE_ROWS_LABELS[block.rows] || block.rows) + statText + " \u00b7 unit: " + escapeHtml(unit) +
+    " \u00b7 " + traces.length + " traces</span>";
+
+  const built = tableRowGroups(slotData, block, traces);
+  const scroll = document.createElement("div");
+  scroll.className = "dt-scroll";
+  section.appendChild(scroll);
+
+  if (!built.groups.length || !traces.length) {
+    scroll.innerHTML = '<div style="padding: 10px 2px; color: var(--ink-faint); font-size: 12px;">No data rows for the selected filters.</div>';
+    return;
+  }
+
+  // optional monthly WY/CY total columns per trace
+  const totalCols = [];
+  if (built.rowsMode === "monthly" && block.wyTotals) totalCols.push({ label: "WY sum", basis: "water" });
+  if (built.rowsMode === "monthly" && block.cyTotals) totalCols.push({ label: "CY sum", basis: "calendar" });
+  const totalsByTrace = new Map();
+  for (const t of totalCols) {
+    for (const tr of traces) {
+      const groups = groupValuesByBasis(tr.points, t.basis, []);
+      const sums = new Map();
+      for (const [y, vals] of groups) sums.set(y, statApply("sum", vals));
+      if (!totalsByTrace.has(tr.traceNumber)) totalsByTrace.set(tr.traceNumber, new Map());
+      totalsByTrace.get(tr.traceNumber).set(t.basis, sums);
+    }
+  }
+
+  const fmt = v => (v == null || !Number.isFinite(v)) ? "\u2014"
+    : v.toLocaleString("en-US", { minimumFractionDigits: block.decimals, maximumFractionDigits: block.decimals });
+
+  const table = document.createElement("table");
+  table.className = "scatter-points-table";
+  const thead = document.createElement("thead");
+  const hr = document.createElement("tr");
+  const th0 = document.createElement("th");
+  th0.textContent = built.rowsMode === "monthly" ? "Period" : (built.rowsMode === "water_year" ? "Water year" : built.rowsMode === "annual" ? "Year" : "Calendar year");
+  hr.appendChild(th0);
+  for (const tr of traces) {
+    const label = model.labels.get(tr.traceNumber) || traceLabel(tr.traceNumber);
+    const th = document.createElement("th");
+    th.textContent = label + " (" + tr.traceNumber + ")";
+    if (highlightedTrace === tr.traceNumber) th.classList.add("dt-hl");
+    hr.appendChild(th);
+    for (const t of totalCols) {
+      const thT = document.createElement("th");
+      thT.textContent = label + " " + t.label;
+      thT.classList.add("total-col");
+      hr.appendChild(thT);
+    }
+  }
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  // row year helpers — monthly rows sit in a calendar year; their water year
+  // is rowYear + 1 when the month is Oct-Dec
+  const rowMeta = g => {
+    const rowYear = Number(String(g.sortKey).slice(0, 4));
+    let rowMonth = null;
+    if (built.rowsMode === "monthly") {
+      for (const tr of traces) {
+        const p = tr.points.find(pt => (pt.periodDate || pt.timestep) === g.key);
+        if (p && p.month != null) { rowMonth = p.month; break; }
+      }
+    }
+    const wy = rowMonth != null ? rowYear + (rowMonth >= WY_START_MONTH ? 1 : 0) : rowYear;
+    return { rowYear: rowYear, wy: wy };
+  };
+
+  const tbody = document.createElement("tbody");
+  for (const g of built.groups) {
+    if (kept && !kept.years.has(Number(g.sortKey))) continue;  // value conditions also filter rows
+    const meta = rowMeta(g);
+    const rowEl = document.createElement("tr");
+    const td0 = document.createElement("td");
+    td0.className = "period";
+    td0.textContent = g.label;
+    rowEl.appendChild(td0);
+    for (const tr of traces) {
+      const vals = g.values.get(tr.traceNumber) || [];
+      const td = document.createElement("td");
+      const pairKey = tr.traceNumber + "::" + meta.rowYear;
+      const pairBlank = kept && !kept.pairs.has(pairKey);
+      td.textContent = pairBlank ? "\u2014"
+        : fmt(block.rows === "monthly" ? (vals.length ? vals[0] : null) : statApply(block.stat, vals));
+      if (highlightedTrace === tr.traceNumber) td.classList.add("dt-hl");
+      rowEl.appendChild(td);
+      for (const t of totalCols) {
+        const tdT = document.createElement("td");
+        tdT.classList.add("total-col");
+        const sums = totalsByTrace.get(tr.traceNumber) && totalsByTrace.get(tr.traceNumber).get(t.basis);
+        const y = t.basis === "water" ? meta.wy : meta.rowYear;
+        const v = sums ? sums.get(y) : null;
+        tdT.textContent = (v == null || !Number.isFinite(v)) ? "\u2014" : fmt(v);
+        rowEl.appendChild(tdT);
+      }
+      tbody.appendChild(rowEl);
+    }
+  }
+  table.appendChild(tbody);
+  scroll.appendChild(table);
+
+  // actions: copy + CSV
+  const actionsBar = document.createElement("div");
+  actionsBar.className = "scatter-data-actions";
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button"; copyBtn.className = "mini-button"; copyBtn.textContent = "Copy for Excel";
+  const csvBtn = document.createElement("button");
+  csvBtn.type = "button"; csvBtn.className = "mini-button"; csvBtn.textContent = "Download CSV";
+  actionsBar.appendChild(copyBtn); actionsBar.appendChild(csvBtn);
+  section.appendChild(actionsBar);
+
+  const serialize = delimiter => {
+    const header = [built.rowsMode === "monthly" ? "Period" : "Year"];
+    for (const tr of traces) {
+      const label = model.labels.get(tr.traceNumber) || traceLabel(tr.traceNumber);
+      header.push(label + " (" + tr.traceNumber + ")");
+      for (const t of totalCols) header.push(label + " " + t.label);
+    }
+    const lines = [header];
+    built.groups.forEach(g => {
+      const rowYear = Number(String(g.sortKey).slice(0, 4));
+      const tr0 = traces[0];
+      const p = built.rowsMode === "monthly" && tr0 ? tr0.points.find(pt => (pt.periodDate || pt.timestep) === g.key) : null;
+      const rowMonth = p ? p.month : null;
+      const wy = built.rowsMode === "monthly" && rowMonth != null ? rowYear + (rowMonth >= WY_START_MONTH ? 1 : 0) : rowYear;
+      const row = [g.label];
+      for (const tr of traces) {
+        const vals = g.values.get(tr.traceNumber) || [];
+        const pairKey = tr.traceNumber + "::" + rowYear;
+        const pairBlank = kept && !kept.pairs.has(pairKey);
+        row.push(pairBlank ? "\u2014" : (block.rows === "monthly" ? (vals[0] != null ? fmt(vals[0]) : "\u2014") : fmt(statApply(block.stat, vals))));
+        for (const t of totalCols) {
+          const sums = totalsByTrace.get(tr.traceNumber) && totalsByTrace.get(tr.traceNumber).get(t.basis);
+          const y = t.basis === "water" ? wy : rowYear;
+          const v = sums && sums.get(y);
+          row.push((v == null || !Number.isFinite(v)) ? "\u2014" : fmt(v));
+        }
+      }
+      lines.push(row);
+    });
+    return lines.map(row => row.map(cell => {
+      const text = String(cell == null ? "" : cell);
+      return delimiter === "," ? '"' + text.replaceAll('"', '""') + '"' : text.replaceAll("\t", " ");
+    }).join(delimiter)).join("\r\n");
+  };
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(serialize("\t"));
+      copyBtn.textContent = "Copied";
+    } catch (err) {
+      const textarea = document.createElement("textarea");
+      textarea.value = serialize("\t");
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+      copyBtn.textContent = "Copied";
+    }
+    setTimeout(() => { copyBtn.textContent = "Copy for Excel"; }, 3000);
+  });
+  csvBtn.addEventListener("click", () => {
+    const name = String((block.title || block.slot) + "-" + built.rowsMode).replace(/[^A-Za-z0-9_.-]+/g, "_");
+    downloadBlob(new Blob([serialize(",")], { type: "text/csv;charset=utf-8" }), name + ".csv");
+  });
+}
+
+function renderTablePreset(preset) {
+  const grid = document.getElementById("plotGrid");
+  grid.innerHTML = "";
+  grid.style.gridTemplateColumns = "1fr";
+  if (!(preset.tables || []).length) {
+    grid.innerHTML = '<div class="empty-note">This table preset has no tables.</div>';
+    return;
+  }
+  for (const block of preset.tables || []) {
+    const section = document.createElement("section");
+    section.className = "table-block";
+    grid.appendChild(section);
+    renderTableBlock(section, block);
+  }
+}
+
+function selectTablePreset(idx) {
+  currentTablePresetIndex = idx;
+  currentPreset = null;
+  document.querySelectorAll("#presetBar button").forEach(b => b.classList.remove("active"));
+  const tableBar = document.getElementById("tablePresetBar");
+  tableBar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.idx === String(idx)));
+  renderTablePreset(TABLE_PRESETS[idx]);
+}
+
+function renderTablePresetBar() {
+  const bar = document.getElementById("tablePresetBar");
+  if (!TABLE_PRESETS.length) { bar.style.display = "none"; return; }
+  bar.style.display = "flex";
+  bar.innerHTML = '<span class="bar-label">Tables</span>';
+  TABLE_PRESETS.forEach((preset, idx) => {
+    const btn = document.createElement("button");
+    btn.textContent = preset.name || preset.id;
+    btn.dataset.idx = String(idx);
+    btn.addEventListener("click", () => selectTablePreset(idx));
+    bar.appendChild(btn);
+  });
 }
 
 /* ---- toolbar (trace visibility, layout, add plot, reset) ---- */
@@ -6973,6 +7521,7 @@ function loadData(parsedFiles) {
   }
 
   renderPresetBar();
+  renderTablePresetBar();
   let idx = PRESETS.findIndex(p => p.id === DEFAULT_PRESET);
   if (idx < 0) idx = 0;
   selectPreset(idx);

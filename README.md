@@ -10,6 +10,28 @@ Two things live in this repository:
    application the viewer's presets and plot recipes come from. Its source is
    included in this repository (see [the Python app](#crmms-esp-compare--report-builder-python-app)).
 
+### Preset builder (local tool)
+
+`preset-builder.html` (in the repo root, but **not published to GitHub Pages** —
+it is git-excluded as a local tool) helps you compose new plot presets and
+custom table presets without hand-editing JSON:
+
+1. Open the file locally (double-click), or serve the repo and open it over http
+   to also auto-load `data/res.rdf`.
+2. Add RDF files (any current or future RDF) — their slot lists populate the
+   pickers.
+3. Optionally **Open index.html** to import your existing presets for editing.
+4. Compose plot presets and table presets (monthly / water-year /
+   calendar-year / annual rows, sum/avg/min/max/end statistics, trace / year /
+   month filters, and App-style value conditions).
+5. **Save updated index.html** splices both preset arrays between their
+   markers and downloads the updated file — replace your repo copy, review the
+   diff, then commit and push.
+
+The published viewer page stays view-only for end users.
+
+---
+
 ---
 
 ## Plot viewer (GitHub Pages)
