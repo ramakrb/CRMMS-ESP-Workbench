@@ -4476,8 +4476,7 @@ const DEFAULT_PRESET = "";
  * Preset plot definitions — verbatim plot_presets from explorer_presets.json
  * (CRMMS ESP Compare & Report Builder). Edit/extend to add your own.
  * ========================================================================= */
-/* PRESETS:START */
-const PRESETS = [
+const PRESETS = /* PRESETS:START */[
   {
     "id": "powell-mead-elevations",
     "name": "Powell + Mead Elevations",
@@ -4760,12 +4759,10 @@ const PRESETS = [
       }
     ]
   }
-];
+]/* PRESETS:END */;
 if (window.__EXTRA_PRESETS__) PRESETS.push(...window.__EXTRA_PRESETS__);
-/* PRESETS:END */
 
-/* TABLE_PRESETS:START */
-const TABLE_PRESETS = [
+const TABLE_PRESETS = /* TABLE_PRESETS:START */[
   {
     "id": "powell-elevation-tables",
     "name": "Powell Pool Elevation Tables",
@@ -4841,9 +4838,8 @@ const TABLE_PRESETS = [
       }
     ]
   }
-];
+]/* TABLE_PRESETS:END */;
 if (window.__EXTRA_TABLE_PRESETS__) TABLE_PRESETS.push(...window.__EXTRA_TABLE_PRESETS__);
-/* TABLE_PRESETS:END */
 
 /* ===================== end of configuration ============================= */
 
