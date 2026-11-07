@@ -43,6 +43,17 @@
     font-size: 11.5px;
     color: var(--ink-faint);
   }
+  .run-badge {
+    display: none;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border-radius: 12px;
+    padding: 3px 12px;
+    width: fit-content;
+  }
   .wrap { max-width: 1500px; margin: 0 auto; padding: 0 22px; }
 
   #statusPanel { margin-top: 14px; }
@@ -352,6 +363,7 @@
   <div class="wrap">
     <h1 id="pageTitle">CRMMS ESP Preset Plots</h1>
     <div class="tagline">Standalone viewer for RiverWare RDF output &middot; renders the CRMMS Explorer preset plots &middot; no server required</div>
+    <div id="runDateBadge" class="run-badge"></div>
   </div>
 </header>
 
@@ -4344,8 +4356,7 @@ return Plotly;
  * more .rdf files there and the identical pipeline runs.
  * ========================================================================= */
 const RDF_FILES = [
-  // Example (once you commit RDF files under data/):
-  // "./data/myprediction_run.rdf",
+  "./data/res.rdf",
 ];
 
 /* Optional: page title shown in the header. */
@@ -4849,6 +4860,37 @@ function parseRdf(text, sourceName) {
  * values are reported; first occurrence wins.
  * ========================================================================= */
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
+
+/* Parse a RiverWare create_date ("2023-3-10 12:55", "March 10, 2023",
+ * "3/10/2023", ISO...) into {year, month, label} for the header badge. */
+function parseCreateDate(text) {
+  if (text == null) return null;
+  const s = String(text).trim();
+  if (!s) return null;
+  let y = null, m = null;
+  let match = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (match) { y = parseInt(match[1], 10); m = parseInt(match[2], 10); }
+  if (m == null) {
+    match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+    if (match) { m = parseInt(match[1], 10); y = parseInt(match[3], 10); }
+  }
+  if (m == null) {
+    match = /^([A-Za-z]{3,})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/.exec(s);
+    if (match) {
+      const idx = MONTH_NAMES.findIndex(n => n.toLowerCase().startsWith(match[1].slice(0, 3).toLowerCase()));
+      if (idx >= 0) { m = idx + 1; y = parseInt(match[3], 10); }
+    }
+  }
+  if (m == null) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) { y = d.getFullYear(); m = d.getMonth() + 1; }
+  }
+  if (y == null || m == null || m < 1 || m > 12) return null;
+  return { year: y, month: m, label: MONTH_NAMES[m - 1] + " " + y, raw: s };
+}
+
 const CRMMS_ESP_MAPPING = {};  // trace 4 -> 1991 ... trace 33 -> 2020
 for (let t = 4; t <= 33; t++) CRMMS_ESP_MAPPING[t] = 1987 + t;
 
@@ -4883,6 +4925,16 @@ function mergeFiles(parsedFiles) {
   const slots = new Map();
   const conflicts = [];
   const traceNumbers = new Set();
+
+  // model-run date: the latest create_date across the loaded files
+  let runDate = null;
+  for (const file of parsedFiles) {
+    const parsed = parseCreateDate(file.meta && file.meta.create_date);
+    if (parsed && (!runDate || parsed.year > runDate.year ||
+        (parsed.year === runDate.year && parsed.month > runDate.month))) {
+      runDate = parsed;
+    }
+  }
 
   for (const file of parsedFiles) {
     for (const [slotName, rec] of file.slots) {
@@ -4983,6 +5035,7 @@ function mergeFiles(parsedFiles) {
     labels: labels,
     conflicts: conflicts,
     period: minDate ? { min: minDate, max: maxDate } : null,
+    runDate: runDate,
   };
 }
 
@@ -6524,6 +6577,7 @@ async function buildReport() {
   meta.className = "report-meta";
   const metaParts = [
     "Generated " + new Date().toLocaleString(),
+    model.runDate ? "Model run: " + model.runDate.label : null,
     model.files.length + " RDF file" + (model.files.length > 1 ? "s" : "") + ": " + model.files.join(", "),
     model.traceNumbers.length + " traces \u00b7 " + model.slots.size + " slots",
     model.period ? model.period.min + " \u2192 " + model.period.max : "",
@@ -6681,6 +6735,17 @@ function loadData(parsedFiles) {
   }
   saveUiState();
   setupToolbar();
+
+  // model-run badge in the title area (from the RDF's create_date metadata)
+  const badge = document.getElementById("runDateBadge");
+  if (badge) {
+    if (model.runDate) {
+      badge.textContent = "Model run: " + model.runDate.label;
+      badge.style.display = "inline-block";
+    } else {
+      badge.style.display = "none";
+    }
+  }
 
   renderPresetBar();
   let idx = PRESETS.findIndex(p => p.id === DEFAULT_PRESET);

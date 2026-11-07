@@ -1,5 +1,83 @@
 # CRMMS ESP Workbench
 
+Two things live in this repository:
+
+1. **A standalone, serverless plot viewer** (`index.html`) — a single-file web page
+   that reads RiverWare RDF files and renders the CRMMS Explorer preset plots.
+   It is hosted on **GitHub Pages** and updates automatically whenever a new
+   model run is pushed.
+2. **The CRMMS ESP Compare & Report Builder** — the Python (FastAPI) desktop
+   application the viewer's presets and plot recipes come from. Its source is
+   included in this repository (see [the Python app](#crmms-esp-compare--report-builder-python-app)).
+
+---
+
+## Plot viewer (GitHub Pages)
+
+**URL:** https://ramakrb.github.io/CRMMS-ESP-Workbench/
+
+The page automatically loads the RDF file(s) listed in the `RDF_FILES` array at
+the top of `index.html` (currently `data/res.rdf`) — no server, no clicks, no
+install. A **"Model run: *Month Year*"** badge in the title area shows which
+model run the plots are from; it is read from the RDF file's `create_date`
+metadata, so it updates together with the data.
+
+### Monthly model-run update
+
+When a new model run is available:
+
+1. Replace `data/res.rdf` with the new run's RDF file — **keep the same file
+   name** (`res.rdf`).
+2. Commit and push:
+   ```
+   git add data/res.rdf
+   git commit -m "Update model run RDF"
+   git push
+   ```
+3. The hosted page picks up the new data within a few minutes (GitHub Pages
+   caching). If the plots still look old, do a hard refresh (`Ctrl+F5`).
+
+The "Model run" badge updates by itself — it comes from the `create_date`
+line inside the RDF file, not from the page.
+
+### Features
+
+- The CRMMS Explorer preset plot groups (Powell + Mead elevations, Powell
+  Inflow PE, LC Evap) — edit or add presets in the `PRESETS` array in
+  `index.html`
+- Per-plot settings: plot type (line / bar / stacked bar / scatter / box),
+  transforms (raw, water-year sum, calendar-year sum), axis titles and ranges,
+  x-range zooms, unit scaling, and reference lines — horizontal (a Y value)
+  **and vertical** (a date, category, or number on the X axis)
+- On-plot **Year selector** on year-sum bar/stacked/scatter plots, populated
+  with the years in the data
+- Trace visibility with linked highlighting: click a trace in any chart (or a
+  column in the data table) and the same trace highlights everywhere.
+  Ensemble traces (ESP 1991–2020) are shown by default; Max/Min/Most are
+  opt-in via the Traces menu
+- Data table (period rows × trace columns) below the charts
+- **Build report**: a printable report with every chart, editable notes and
+  assumptions, and the data table — use the browser's *Print / Save as PDF*
+  to share it
+
+### Running the page locally
+
+Open `index.html` directly (double-click). Browsers block automatic file
+reading from disk, so the page shows a **drag-and-drop zone** — drop one or
+more `.rdf` files there and everything works exactly as hosted (files are
+processed in the browser; nothing is uploaded).
+
+### Editing presets
+
+Presets are plain JSON in the `PRESETS` array near the top of `index.html`.
+Only `slot` is required per plot; everything else has sensible defaults. The
+main application's Explorer presets use the same JSON schema
+(`explorer_presets.json`), so presets can be copied in either direction.
+
+---
+
+## CRMMS ESP Compare & Report Builder (Python app)
+
 **Compare, explore, and report on CRMMS ESP model runs.**
 
 CRMMS ESP Workbench is a local Windows web application for reviewing CRMMS
@@ -10,7 +88,7 @@ RiverWare RDF `Object.Slot`, and produces a formatted Word report.
 The application UI and FastAPI service identify themselves as **CRMMS ESP
 Compare & Report Builder**.
 
-## Features
+### Features
 
 - Compare Run A and Run B from RiverWare `.rdf` files or legacy
   `EnsembleOutput.xlsx` workbooks.
@@ -32,7 +110,7 @@ Compare & Report Builder**.
 - Run as a portable one-file Windows executable with no Python installation on
   the target machine.
 
-## Supported inputs
+### Supported inputs
 
 | Format | Details |
 |---|---|
@@ -45,9 +123,9 @@ also include deterministic traces, typically the first 2–3 traces in the file.
 Trace selection for calculations is configured separately from trace selection
 for plots.
 
-## Quick start
+### Quick start
 
-### Option 1: Portable executable
+#### Option 1: Portable executable
 
 If a built executable is available, run:
 
@@ -62,7 +140,7 @@ console window or press `Ctrl+C` to stop it.
 The executable is unsigned, so Windows SmartScreen may show a warning on first
 launch. The `dist/` directory is generated locally and is not tracked by Git.
 
-### Option 2: Windows batch launcher
+#### Option 2: Windows batch launcher
 
 Double-click:
 
@@ -74,31 +152,26 @@ The launcher checks the required files, creates `.venv` if needed, installs
 dependencies when `requirements.txt` changes, starts Uvicorn on port 8000, and
 opens the browser after the health endpoint responds.
 
-### Option 3: Run from source
+#### Option 3: Run from source
 
 Requires Python 3.11 or newer. The project is currently tested with Python
 3.13.7 on Windows.
 
 ```powershell
-cd C:\Temp\CRMMS_App\App
 py -3 -m venv .venv
 .venv\Scripts\activate
 python -m pip install -r requirements.txt
 python launcher.py
 ```
 
-To start the server without the launcher's automatic browser opening, run
-Uvicorn from the package parent directory:
-
-```powershell
-cd C:\Temp\CRMMS_App
-App\.venv\Scripts\python.exe -m uvicorn App.main:app --host 127.0.0.1 --port 8000
-```
+The application folder itself is the Python package (`main.py` uses relative
+imports), so the folder name must be a valid Python package name — e.g.
+rename or junction it as `...\CRMMS_App\App` before running from source.
 
 Interactive API documentation is available at `http://127.0.0.1:8000/docs`
 when the server is running.
 
-## Typical workflow
+### Typical workflow
 
 1. Choose **Compare two runs** or **Explore data**.
 2. Upload Run A and Run B files.
@@ -112,7 +185,7 @@ when the server is running.
 6. Open **Report Builder**, add notes and assumptions, and download the Word
    report.
 
-## RDF behavior
+### RDF behavior
 
 - Slot matching is exact and case-sensitive.
 - A logical CRMMS input can be mapped to any RiverWare `Object.Slot`.
@@ -129,41 +202,41 @@ when the server is running.
 - The generic parser in `rdf_reader.py` remains slot-agnostic. CRMMS-specific
   mappings and report logic live in `comparison.py` and `main.py`.
 
-## Project layout
+### Project layout
 
 ```text
-App/
-  main.py                       FastAPI application and HTTP endpoints
-  comparison.py                 CRMMS comparison engine and RDF adapter
-  rdf_reader.py                 Generic RiverWare RDF reader
-  runtime_paths.py              Source/frozen resource paths
-  launcher.py                   Source and PyInstaller entry point
-  launch_browser.py             Browser helper for the batch launcher
-  __init__.py                   Python package marker
-  explorer_presets.json         Default Explorer plot/analysis presets
-  requirements.txt              Runtime dependencies
-  CRMMS_ESP_Compare.spec        PyInstaller one-file build definition
-  Start_CRMMS_Web_App.bat       Portable source launcher for Windows
+index.html                     Standalone plot viewer (GitHub Pages)
+data/                          RDF files published to the plot viewer
+  main.py                      FastAPI application and HTTP endpoints
+  comparison.py                CRMMS comparison engine and RDF adapter
+  rdf_reader.py                Generic RiverWare RDF reader
+  runtime_paths.py             Source/frozen resource paths
+  launcher.py                  Source and PyInstaller entry point
+  launch_browser.py            Browser helper for the batch launcher
+  __init__.py                  Python package marker
+  explorer_presets.json        Default Explorer plot/analysis presets
+  requirements.txt             Runtime dependencies
+  CRMMS_ESP_Compare.spec       PyInstaller one-file build definition
+  Start_CRMMS_Web_App.bat      Portable source launcher for Windows
   reporting/
-    report.py                   Word report generation
-    plots.py                    Matplotlib report figures
-    report_template.docx        Bundled CRMMS report template
+    report.py                  Word report generation
+    plots.py                   Matplotlib report figures
+    report_template.docx       Bundled CRMMS report template
   static/
-    index.html                  Application shell
-    app.js                      Frontend logic
-    styles.css                  Frontend styles
-    plotly.min.js               Bundled Plotly runtime
+    index.html                 Application shell
+    app.js                     Frontend logic
+    styles.css                 Frontend styles
+    plotly.min.js              Bundled Plotly runtime
 ```
 
 Generated or local-only directories such as `.venv/`, `build/`, `dist/`, and
 `__pycache__/` are excluded by `.gitignore`.
 
-## Build the Windows executable
+### Build the Windows executable
 
 Install PyInstaller into the virtual environment, then run the spec:
 
 ```powershell
-cd C:\Temp\CRMMS_App\App
 .venv\Scripts\python.exe -m pip install pyinstaller
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean CRMMS_ESP_Compare.spec
 ```
@@ -178,7 +251,7 @@ The spec bundles the static UI, Explorer presets, report template, and required
 `python-docx` data files, and collects the Uvicorn/AnyIO submodules used at
 runtime.
 
-## API overview
+### API overview
 
 | Endpoint | Purpose |
 |---|---|
@@ -195,7 +268,7 @@ runtime.
 | `GET /api/explorer/presets` | Read saved Explorer presets |
 | `PUT /api/explorer/presets` | Replace saved Explorer presets |
 
-## Configuration and limits
+### Configuration and limits
 
 | Setting | Current value |
 |---|---|
@@ -212,7 +285,7 @@ In a frozen build, editable Explorer presets are stored under
 `%LOCALAPPDATA%\CRMMS_ESP_Compare\explorer_presets.json`. The server binds to
 `127.0.0.1` only.
 
-## Performance notes
+### Performance notes
 
 The RDF reader is designed for repeated interactive use:
 
@@ -228,7 +301,7 @@ Performance depends on the number of RDF files, traces, slots, and timesteps.
 Large daily files naturally produce more rows and take longer than small
 monthly files.
 
-## Troubleshooting
+### Troubleshooting
 
 - **Port already in use:** the portable executable chooses the next free port
   between 8000 and 8019. The batch launcher checks for an existing server on
@@ -243,7 +316,7 @@ monthly files.
   frozen build, or `explorer_presets.json` is writable when running from
   source.
 
-## Acknowledgements
+### Acknowledgements
 
 The RDF parser is derived from the public-domain RWDataPlyr 0.6.6
 implementation (CC0; U.S. Bureau of Reclamation) and is validated against its
@@ -252,7 +325,7 @@ sample RDF formats.
 The application uses FastAPI, Uvicorn, pandas, openpyxl, python-docx,
 Matplotlib, and Plotly.
 
-## License
+### License
 
 No license file is currently included in this repository. Contact the
 repository owner for reuse or distribution terms.
