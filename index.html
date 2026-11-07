@@ -169,6 +169,8 @@
   .table-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
   .table-block-head strong { font-size: 14px; color: var(--ink); }
   .table-block-head .table-block-sub { font-size: 11px; color: var(--ink-faint); }
+  .add-slot-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .add-slot-row select { max-width: 340px; }
   .table-block .dt-scroll { border-radius: 8px; }
   .total-col { background: #f6f9fa; color: var(--ink-soft); }
   .dt-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -187,7 +189,7 @@
   }
   .filters-grid .check-row { display: flex; gap: 12px; align-items: center; font-size: 11.5px; color: var(--ink-soft); font-weight: 400; text-transform: none; }
   .filters-grid .check-row input { width: auto; }
-  .data-table tr.row-selected td, .data-table tr.row-selected th { background: #e4f3f1 !important; }
+  .data-table tr.row-selected td, .data-table tr.row-selected th, .scatter-points-table tr.row-selected td, .scatter-points-table tr.row-selected th { background: #e4f3f1 !important; }
   .data-table td.period { cursor: pointer; }
   #presetBar .preset-desc {
     flex-basis: 100%;
@@ -396,22 +398,22 @@
     border-right: 1px solid #f0f4f6;
     white-space: nowrap;
   }
-  .data-table thead th {
+  .data-table thead th, .scatter-points-table thead th {
     position: sticky; top: 0; z-index: 2;
     background: #eef3f4; font-weight: 600; color: var(--ink-soft);
     cursor: pointer; user-select: none;
   }
-  .data-table td.period, .data-table th.period {
+  .data-table td.period, .data-table th.period, .scatter-points-table td.period, .scatter-points-table th.period {
     position: sticky; left: 0; z-index: 1;
     background: #eef3f4; font-weight: 600; text-align: left;
     cursor: default; user-select: none;
   }
   .data-table thead th.period { z-index: 3; }
-  .data-table td:not(.period) { text-align: right; cursor: pointer; font-variant-numeric: tabular-nums; }
-  .data-table td:not(.period):hover { background: #eef4f5; }
-  .data-table .dt-hl { background: rgba(22, 124, 128, 0.16); color: #0e4f52; font-weight: 700; }
-  .data-table thead th.dt-hl { background: rgba(22, 124, 128, 0.3); }
-  .data-table .dt-dim { color: #aeb8bd; background: #fafbfc; font-weight: 400; }
+  .data-table td:not(.period), .scatter-points-table td:not(.period) { text-align: right; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .data-table td:not(.period):hover, .scatter-points-table td:not(.period):hover { background: #eef4f5; }
+  .data-table .dt-hl, .scatter-points-table .dt-hl { background: rgba(22, 124, 128, 0.16); color: #0e4f52; font-weight: 700; }
+  .data-table thead th.dt-hl, .scatter-points-table thead th.dt-hl { background: rgba(22, 124, 128, 0.3); }
+  .data-table .dt-dim, .scatter-points-table .dt-dim { color: #aeb8bd; background: #fafbfc; font-weight: 400; }
 
   /* ---- printable report overlay ---- */
   #reportOverlay {
@@ -5962,6 +5964,7 @@ let uiState = { presets: {}, global: { tracesVisible: null } };
 let currentPreset = null;
 let currentPresetIndex = 0;
 let currentTablePresetIndex = -1;
+let sessionTableBlocks = [];
 let viewMode = "plots";  // "plots" | "tables"
 let toolbarWired = false;
 
@@ -6521,6 +6524,7 @@ function selectPreset(idx) {
 }
 
 function selectTablePreset(idx) {
+  sessionTableBlocks = [];  // added tables are per-preset-view
   currentTablePresetIndex = idx;
   currentPreset = null;
   viewMode = "tables";
@@ -6723,6 +6727,19 @@ function tableRowGroups(slotData, block, traces) {
 
 const TABLE_STAT_LABELS = { sum: "Sum", avg: "Average", min: "Minimum", max: "Maximum", end: "End of period" };
 
+function newTableBlock(slot) {
+  return {
+    slot: slot || "",
+    rows: "monthly",
+    stat: "sum",
+    wyTotals: false,
+    cyTotals: false,
+    title: "",
+    decimals: 2,
+    filters: { traces: "visible", yearFrom: "", yearTo: "", months: "", conditions: [], logic: "all" },
+  };
+}
+
 function tableControlSelect(field, options, value) {
   const sel = document.createElement("select");
   sel.dataset.tfield = field;
@@ -6782,7 +6799,8 @@ function renderTableBlock(section, rawBlock) {
   const pGrid = document.createElement("div");
   pGrid.className = "filters-grid";
   const isMonthly = block.rows === "monthly";
-  pGrid.appendChild(tableControlWrap("Rows", tableControlSelect("rows", [["monthly", "Monthly values"], ["water_year", "Water-year aggregation"], ["calendar_year", "Calendar-year aggregation"], ["annual", "Annual values"]], block.rows)));
+  const slotNames = [...model.slots.keys()];
+  pGrid.appendChild(tableControlWrap("Slot", tableControlSelect("slot", slotNames.map(s => [s, s]), block.slot)));
   const statWrap = tableControlWrap("Statistic", tableControlSelect("stat", [["sum", "Sum"], ["avg", "Average"], ["min", "Minimum"], ["max", "Maximum"], ["end", "End of period"]], block.stat));
   if (isMonthly) statWrap.style.display = "none";
   pGrid.appendChild(statWrap);
@@ -6829,6 +6847,14 @@ function renderTableBlock(section, rawBlock) {
       else if (f === "yearFrom" || f === "yearTo" || f === "months") section._block.filters[f] = el.value;
       else section._block[f] = el.value;
       renderTableBlock(section, section._block);  // panel state preserved via section._filtersOpen
+    });
+  });
+  // trace-column click -> highlight that trace everywhere (like the main table)
+  const blockTable = () => section.querySelector(".scatter-points-table");
+  panel.addEventListener("change", () => {
+    const bt = blockTable();
+    if (bt) bt.querySelectorAll("thead th[data-trace]").forEach(th => {
+      th.classList.toggle("dt-hl", highlightedTrace != null && highlightedTrace === Number(th.dataset.trace));
     });
   });
   section.appendChild(panel);
@@ -7038,11 +7064,42 @@ function renderTablePreset(preset) {
   const grid = document.getElementById("plotGrid");
   grid.innerHTML = "";
   grid.style.gridTemplateColumns = "1fr";
-  if (!(preset.tables || []).length) {
+
+  // add-a-slot-table control (session-level: cleared when you switch presets)
+  const addRow = document.createElement("div");
+  addRow.className = "add-slot-row";
+  const addSel = document.createElement("select");
+  addSel.id = "addSlotSelect";
+  for (const name of model.slots.keys()) {
+    const o = document.createElement("option");
+    o.value = name;
+    o.textContent = name;
+    addSel.appendChild(o);
+  }
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "mini-button";
+  addBtn.textContent = "+ Add slot table";
+  addBtn.addEventListener("click", () => {
+    const slot = addSel.value;
+    if (!slot) return;
+    sessionTableBlocks.push(newTableBlock(slot));
+    renderTablePreset(TABLE_PRESETS[currentTablePresetIndex]);
+  });
+  addRow.appendChild(addSel);
+  addRow.appendChild(addBtn);
+  const addHint = document.createElement("span");
+  addHint.className = "hint";
+  addHint.textContent = "Adds a filterable table for any slot (cleared when you switch presets).";
+  addRow.appendChild(addHint);
+  grid.appendChild(addRow);
+
+  const blocks = (preset.tables || []).concat(sessionTableBlocks);
+  if (!blocks.length) {
     grid.innerHTML = '<div class="empty-note">This table preset has no tables.</div>';
     return;
   }
-  for (const block of preset.tables || []) {
+  for (const block of blocks) {
     const section = document.createElement("section");
     section.className = "table-block";
     grid.appendChild(section);
@@ -7055,7 +7112,7 @@ function renderTablePresetBar() {
   const bar = document.getElementById("tablePresetBar");
   if (!TABLE_PRESETS.length) { bar.style.display = "none"; return; }
   bar.style.display = "flex";
-  bar.innerHTML = '<span class="bar-label">Tables</span>';
+  bar.innerHTML = '<span class="bar-label">Slot table filters</span>';
   TABLE_PRESETS.forEach((preset, idx) => {
     const btn = document.createElement("button");
     btn.textContent = preset.name || preset.id;
