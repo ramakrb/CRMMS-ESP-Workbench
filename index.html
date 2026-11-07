@@ -171,6 +171,22 @@
   .table-block-head .table-block-sub { font-size: 11px; color: var(--ink-faint); }
   .table-block .dt-scroll { border-radius: 8px; }
   .total-col { background: #f6f9fa; color: var(--ink-soft); }
+  .dt-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  #dataTableSection.dt-highlight .dt-controls { display: none; }
+  .dt-slot-heading {
+    margin: 14px 0 6px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft);
+  }
+  .dt-slot-heading small { font-weight: 400; color: var(--ink-faint); }
+  .filters-panel { margin: 8px; border: 1px solid var(--line-soft); border-radius: 10px; background: #fbfcfc; }
+  .filters-panel > summary { padding: 8px 11px; font-weight: 800; cursor: pointer; font-size: 11.5px; color: var(--ink-soft); }
+  .filters-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; padding: 4px 11px 12px; }
+  .filters-grid label { display: grid; gap: 3px; font-size: 10px; font-weight: 700; color: var(--ink-faint); }
+  .filters-grid input, .filters-grid select {
+    font-family: inherit; font-size: 11.5px; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: #fff; width: 100%;
+  }
+  .filters-grid .check-row { display: flex; gap: 12px; align-items: center; font-size: 11.5px; color: var(--ink-soft); font-weight: 400; text-transform: none; }
+  .filters-grid .check-row input { width: auto; }
   #presetBar .preset-desc {
     flex-basis: 100%;
     font-size: 11.5px;
@@ -378,22 +394,22 @@
     border-right: 1px solid #f0f4f6;
     white-space: nowrap;
   }
-  #dataTable thead th {
+  .data-table thead th {
     position: sticky; top: 0; z-index: 2;
     background: #eef3f4; font-weight: 600; color: var(--ink-soft);
     cursor: pointer; user-select: none;
   }
-  #dataTable td.period, #dataTable th.period {
+  .data-table td.period, .data-table th.period {
     position: sticky; left: 0; z-index: 1;
     background: #eef3f4; font-weight: 600; text-align: left;
     cursor: default; user-select: none;
   }
-  #dataTable thead th.period { z-index: 3; }
-  #dataTable td:not(.period) { text-align: right; cursor: pointer; font-variant-numeric: tabular-nums; }
-  #dataTable td:not(.period):hover { background: #eef4f5; }
-  #dataTable .dt-hl { background: rgba(22, 124, 128, 0.16); color: #0e4f52; font-weight: 700; }
-  #dataTable thead th.dt-hl { background: rgba(22, 124, 128, 0.3); }
-  #dataTable .dt-dim { color: #aeb8bd; background: #fafbfc; font-weight: 400; }
+  .data-table thead th.period { z-index: 3; }
+  .data-table td:not(.period) { text-align: right; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .data-table td:not(.period):hover { background: #eef4f5; }
+  .data-table .dt-hl { background: rgba(22, 124, 128, 0.16); color: #0e4f52; font-weight: 700; }
+  .data-table thead th.dt-hl { background: rgba(22, 124, 128, 0.3); }
+  .data-table .dt-dim { color: #aeb8bd; background: #fafbfc; font-weight: 400; }
 
   /* ---- printable report overlay ---- */
   #reportOverlay {
@@ -529,12 +545,14 @@
   <section id="dataTableSection">
     <div class="dt-head">
       <h2>Data table</h2>
-      <label>Slot <select id="dtSlot"></select></label>
-      <label class="inline"><input type="checkbox" id="dtOnlyVisible"> Only visible traces</label>
+      <span id="dtControls" class="dt-controls">
+        <label>Slot <select id="dtSlot"></select></label>
+        <label class="inline"><input type="checkbox" id="dtOnlyVisible"> Only visible traces</label>
+      </span>
       <span id="dtInfo"></span>
       <span id="dtHint">Click a trace column to highlight it in every chart; click again to clear.</span>
     </div>
-    <div class="dt-scroll"><table id="dataTable"></table></div>
+    <div id="dtTables"></div>
   </section>
 
   <footer>CRMMS ESP preset plot viewer &mdash; presets from CRMMS ESP Compare &amp; Report Builder (explorer_presets.json)</footer>
@@ -5942,6 +5960,7 @@ let uiState = { presets: {}, global: { tracesVisible: null } };
 let currentPreset = null;
 let currentPresetIndex = 0;
 let currentTablePresetIndex = -1;
+let viewMode = "plots";  // "plots" | "tables"
 let toolbarWired = false;
 
 function loadUiState() {
@@ -6486,15 +6505,34 @@ function renderPresetBar() {
 function selectPreset(idx) {
   currentPresetIndex = idx;
   currentPreset = PRESETS[idx];
+  viewMode = "plots";
   const bar = document.getElementById("presetBar");
   bar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.idx === String(idx)));
   const tableBar = document.getElementById("tablePresetBar");
   if (tableBar) tableBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+  updateDataTableSectionVisibility();
   renderPreset(currentPreset);
   if (model && document.getElementById("dtSlot").options.length) {
     document.getElementById("dtSlot").value = defaultDataTableSlot();
     renderDataTable();
   }
+}
+
+function selectTablePreset(idx) {
+  currentTablePresetIndex = idx;
+  currentPreset = null;
+  viewMode = "tables";
+  document.querySelectorAll("#presetBar button").forEach(b => b.classList.remove("active"));
+  const tableBar = document.getElementById("tablePresetBar");
+  tableBar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.idx === String(idx)));
+  updateDataTableSectionVisibility();
+  renderTablePreset(TABLE_PRESETS[idx]);
+}
+
+/* the global data table lives on plot pages only — table presets replace it */
+function updateDataTableSectionVisibility() {
+  const section = document.getElementById("dataTableSection");
+  if (section) section.style.display = (model && viewMode === "plots") ? "block" : "none";
 }
 
 /* =========================================================================
@@ -6515,7 +6553,9 @@ function normalizeTableBlock(block) {
   b.rows = ["monthly", "water_year", "calendar_year", "annual"].indexOf(b.rows) >= 0 ? b.rows : "monthly";
   b.stat = ["sum", "avg", "min", "max", "end"].indexOf(b.stat) >= 0 ? b.stat : "sum";
   b.filters = Object.assign({ traces: "visible", yearFrom: "", yearTo: "", months: [], conditions: [], logic: "all" }, b.filters || {});
-  b.filters.months = Array.isArray(b.filters.months) ? b.filters.months.map(Number).filter(m => m >= 1 && m <= 12) : [];
+  b.filters.months = Array.isArray(b.filters.months)
+    ? b.filters.months.map(Number).filter(m => m >= 1 && m <= 12)
+    : String(b.filters.months || "").split(/[ ,;]+/).map(Number).filter(m => Number.isFinite(m) && m >= 1 && m <= 12);
   b.filters.conditions = Array.isArray(b.filters.conditions) ? b.filters.conditions : [];
   b.filters.logic = b.filters.logic === "any" ? "any" : "all";
   b.wyTotals = !!b.wyTotals;
@@ -6681,8 +6721,39 @@ function tableRowGroups(slotData, block, traces) {
 
 const TABLE_STAT_LABELS = { sum: "Sum", avg: "Average", min: "Minimum", max: "Maximum", end: "End of period" };
 
+function tableControlSelect(field, options, value) {
+  const sel = document.createElement("select");
+  sel.dataset.tfield = field;
+  for (const o of options) {
+    const opt = document.createElement("option");
+    opt.value = o[0];
+    opt.textContent = o[1];
+    if (String(o[0]) === String(value)) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  return sel;
+}
+
+function tableControlInput(field, value, type) {
+  const input = document.createElement("input");
+  input.type = type || "text";
+  input.dataset.tfield = field;
+  input.value = value == null ? "" : String(value);
+  return input;
+}
+
+function tableControlWrap(labelText, el) {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  label.appendChild(span);
+  label.appendChild(el);
+  return label;
+}
+
 function renderTableBlock(section, rawBlock) {
   const block = normalizeTableBlock(rawBlock);
+  section.innerHTML = "";  // re-renders (filter changes) must replace, not append
   const head = document.createElement("div");
   head.className = "table-block-head";
   section.appendChild(head);
@@ -6693,6 +6764,62 @@ function renderTableBlock(section, rawBlock) {
       '<span class="table-block-sub"><span class="warn-line">Slot not found in the loaded RDF files: <code>' + escapeHtml(block.slot) + "</code></span></span>";
     return;
   }
+
+  // on-page Filter & aggregate panel (session-level view adjustments)
+  const panel = document.createElement("details");
+  panel.className = "filters-panel";
+  if (section._filtersOpen) panel.open = true;
+  panel.addEventListener("toggle", () => { section._filtersOpen = panel.open; });
+  const pSummary = document.createElement("summary");
+  pSummary.textContent = "Filter & aggregate";
+  panel.appendChild(pSummary);
+  const pGrid = document.createElement("div");
+  pGrid.className = "filters-grid";
+  const isMonthly = block.rows === "monthly";
+  pGrid.appendChild(tableControlWrap("Rows", tableControlSelect("rows", [["monthly", "Monthly values"], ["water_year", "Water-year aggregation"], ["calendar_year", "Calendar-year aggregation"], ["annual", "Annual values"]], block.rows)));
+  const statWrap = tableControlWrap("Statistic", tableControlSelect("stat", [["sum", "Sum"], ["avg", "Average"], ["min", "Minimum"], ["max", "Maximum"], ["end", "End of period"]], block.stat));
+  if (isMonthly) statWrap.style.display = "none";
+  pGrid.appendChild(statWrap);
+  pGrid.appendChild(tableControlWrap("Traces", tableControlSelect("traces", [["visible", "Currently visible"], ["ensemble", "Ensemble only"], ["all", "All traces"]], block.filters.traces)));
+  pGrid.appendChild(tableControlWrap("Year from", tableControlInput("yearFrom", block.filters.yearFrom)));
+  pGrid.appendChild(tableControlWrap("Year to", tableControlInput("yearTo", block.filters.yearTo)));
+  pGrid.appendChild(tableControlWrap("Months (e.g. 10,11,12)", tableControlInput("months", Array.isArray(block.filters.months) ? block.filters.months.join(",") : (block.filters.months || ""))));
+  const totalsRow = document.createElement("div");
+  totalsRow.className = "check-row";
+  totalsRow.style.gridColumn = "1 / -1";
+  const wyCheck = tableControlInput("wyTotals", block.wyTotals, "checkbox");
+  const cyCheck = tableControlInput("cyTotals", block.cyTotals, "checkbox");
+  const wyLbl = document.createElement("label");
+  wyLbl.className = "check-row";
+  wyLbl.appendChild(wyCheck);
+  wyLbl.appendChild(document.createTextNode(" WY sum column (monthly tables)"));
+  const cyLbl = document.createElement("label");
+  cyLbl.className = "check-row";
+  cyLbl.appendChild(cyCheck);
+  cyLbl.appendChild(document.createTextNode(" CY sum column (monthly tables)"));
+  totalsRow.appendChild(wyLbl);
+  totalsRow.appendChild(cyLbl);
+  pGrid.appendChild(totalsRow);
+  if (block.filters.conditions && block.filters.conditions.length) {
+    const condNote = document.createElement("div");
+    condNote.className = "hint";
+    condNote.style.gridColumn = "1 / -1";
+    condNote.textContent = "Value conditions from this preset are active (" + block.filters.conditions.length +
+      "), keeping only matching trace/year combinations. Edit them in the Preset Builder.";
+    pGrid.appendChild(condNote);
+  }
+  panel.appendChild(pGrid);
+  panel.querySelectorAll("[data-tfield]").forEach(el => {
+    el.addEventListener("change", () => {
+      const f = el.dataset.tfield;
+      if (f === "wyTotals" || f === "cyTotals") section._block[f] = el.checked;
+      else if (f === "traces" || f === "logic") section._block.filters[f] = el.value;
+      else if (f === "yearFrom" || f === "yearTo" || f === "months") section._block.filters[f] = el.value;
+      else section._block[f] = el.value;
+      renderTableBlock(section, section._block);  // panel state preserved via section._filtersOpen
+    });
+  });
+  section.appendChild(panel);
 
   // trace columns: block filter + value conditions (trace::year pairs —
   // matching trace columns AND matching year rows are kept)
@@ -6886,17 +7013,9 @@ function renderTablePreset(preset) {
     const section = document.createElement("section");
     section.className = "table-block";
     grid.appendChild(section);
-    renderTableBlock(section, block);
+    section._block = normalizeTableBlock(block);
+    renderTableBlock(section, section._block);
   }
-}
-
-function selectTablePreset(idx) {
-  currentTablePresetIndex = idx;
-  currentPreset = null;
-  document.querySelectorAll("#presetBar button").forEach(b => b.classList.remove("active"));
-  const tableBar = document.getElementById("tablePresetBar");
-  tableBar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.idx === String(idx)));
-  renderTablePreset(TABLE_PRESETS[idx]);
 }
 
 function renderTablePresetBar() {
@@ -6974,7 +7093,7 @@ function setupToolbar() {
   }
   dtSlot.value = defaultDataTableSlot();
   document.getElementById("dtOnlyVisible").checked = true;  // Max/Min/Most stay out of the table by default
-  document.getElementById("dataTableSection").style.display = "block";
+  updateDataTableSectionVisibility();
   renderDataTable();
 
   if (toolbarWired) return;
@@ -7045,7 +7164,7 @@ function setupToolbar() {
   });
   document.getElementById("dtSlot").addEventListener("change", renderDataTable);
   document.getElementById("dtOnlyVisible").addEventListener("change", renderDataTable);
-  document.getElementById("dataTable").addEventListener("click", e => {
+  document.getElementById("dtTables").addEventListener("click", e => {
     const cell = e.target.closest("[data-trace]");
     if (!cell) return;
     const tn = parseInt(cell.dataset.trace, 10);
@@ -7086,25 +7205,37 @@ function fmtVal(v) {
   return v.toFixed(2);
 }
 
-function renderDataTable() {
-  const table = document.getElementById("dataTable");
-  const info = document.getElementById("dtInfo");
-  if (!model) return;
-  const slotName = document.getElementById("dtSlot").value;
-  const slotData = model.slots.get(slotName);
-  table.innerHTML = "";
-  if (!slotData) {
-    info.textContent = "";
-    return;
+/* Unique slots plotted by the current plot preset (in card order) */
+function plottedSlots() {
+  if (!currentPreset || !currentPreset.plots) {
+    const dtSlot = document.getElementById("dtSlot");
+    return dtSlot && dtSlot.value && model && model.slots.has(dtSlot.value) ? [dtSlot.value] : [];
   }
+  const names = [];
+  for (const item of currentPreset.plots) {
+    for (const n of [item.slot, item.y_slot, ...(item.plot_slots || [])]) {
+      if (n && model.slots.has(n) && !names.includes(n)) names.push(n);
+    }
+  }
+  return names;
+}
 
-  const onlyVisible = document.getElementById("dtOnlyVisible").checked;
-  let traces = onlyVisible ? tracesForSlot(slotData) : slotData.traces;
-  // App behavior: a selected (highlighted) trace filters the table to just
-  // that trace's data column
-  if (highlightedTrace != null) {
-    traces = traces.filter(tr => tr.traceNumber === highlightedTrace);
+/* One bordered table group: optional slot heading + scrollable table of
+ * period rows x trace columns (used by both data-table modes). */
+function buildDataTableGroup(slotData, traces, headingName, highlightTrace) {
+  const wrap = document.createElement("div");
+  if (headingName) {
+    const h = document.createElement("div");
+    h.className = "dt-slot-heading";
+    h.innerHTML = escapeHtml(headingName) +
+      (slotData.unit ? ' <small>\u00b7 unit: ' + escapeHtml(slotData.unit) + "</small>" : "");
+    wrap.appendChild(h);
   }
+  const scroll = document.createElement("div");
+  scroll.className = "dt-scroll";
+
+  const table = document.createElement("table");
+  table.className = "data-table";
 
   const rowMap = new Map();
   for (const tr of traces) {
@@ -7131,8 +7262,8 @@ function renderDataTable() {
     th.dataset.trace = String(tr.traceNumber);
     const label = model.labels.get(tr.traceNumber) || traceLabel(tr.traceNumber);
     th.textContent = label + " (" + tr.traceNumber + ")";
-    if (highlightedTrace === tr.traceNumber) th.classList.add("dt-hl");
-    else if (highlightedTrace != null) th.classList.add("dt-dim");
+    if (highlightTrace != null && highlightTrace === tr.traceNumber) th.classList.add("dt-hl");
+    else if (highlightTrace != null) th.classList.add("dt-dim");
     hr.appendChild(th);
   }
   thead.appendChild(hr);
@@ -7140,26 +7271,71 @@ function renderDataTable() {
 
   const tbody = document.createElement("tbody");
   for (const row of rows) {
-    const trEl = document.createElement("tr");
+    const rowEl = document.createElement("tr");
     const td0 = document.createElement("td");
     td0.className = "period";
     td0.textContent = row.label;
-    trEl.appendChild(td0);
+    rowEl.appendChild(td0);
     for (const tr of traces) {
       const td = document.createElement("td");
       td.dataset.trace = String(tr.traceNumber);
       td.textContent = fmtVal(row.vals.get(tr.traceNumber));
-      if (highlightedTrace === tr.traceNumber) td.classList.add("dt-hl");
-      else if (highlightedTrace != null) td.classList.add("dt-dim");
-      trEl.appendChild(td);
+      if (highlightTrace != null && highlightTrace === tr.traceNumber) td.classList.add("dt-hl");
+      else if (highlightTrace != null) td.classList.add("dt-dim");
+      rowEl.appendChild(td);
     }
-    tbody.appendChild(trEl);
+    tbody.appendChild(rowEl);
   }
   table.appendChild(tbody);
+  scroll.appendChild(table);
+  wrap.appendChild(scroll);
+  return wrap;
+}
 
-  info.textContent = traces.length + " traces \u00d7 " + rows.length + " periods" +
-    (slotData.unit ? " \u00b7 unit: " + slotData.unit : "") +
-    (highlightedTrace != null ? " \u00b7 showing highlighted trace only" : "");
+function renderDataTable() {
+  const host = document.getElementById("dtTables");
+  const info = document.getElementById("dtInfo");
+  const section = document.getElementById("dataTableSection");
+  if (!model) return;
+  const isHighlight = highlightedTrace != null;
+  section.classList.toggle("dt-highlight", isHighlight);
+
+  if (isHighlight) {
+    // App behavior: a selected trace shows its data for EVERY slot plotted on
+    // the page, one table group per slot
+    host.innerHTML = "";
+    const names = plottedSlots();
+    const trLabel = (model.labels.get(highlightedTrace) || traceLabel(highlightedTrace)) + " (" + highlightedTrace + ")";
+    let groupCount = 0;
+    for (const name of names) {
+      const slotData = model.slots.get(name);
+      const tr = slotData.traces.find(t => t.traceNumber === highlightedTrace);
+      if (!tr) continue;
+      groupCount++;
+      host.appendChild(buildDataTableGroup(slotData, [tr], name, highlightedTrace));
+    }
+    info.textContent = "Showing " + trLabel + " across " + groupCount + " plotted slot" +
+      (groupCount === 1 ? "" : "s") + " \u2014 clear the selection to restore the full table";
+    return;
+  }
+
+  const dtSlot = document.getElementById("dtSlot");
+  const slotName = dtSlot.value;
+  const slotData = model.slots.get(slotName);
+  host.innerHTML = "";
+  if (!slotData) {
+    info.textContent = "";
+    return;
+  }
+  const onlyVisible = document.getElementById("dtOnlyVisible").checked;
+  const traces = onlyVisible ? tracesForSlot(slotData) : slotData.traces;
+  host.appendChild(buildDataTableGroup(slotData, traces, null, null));
+  info.textContent = traces.length + " traces \u00d7 " + (function () {
+    const rows = new Set();
+    for (const tr of traces) for (const p of tr.points) if (p.periodDate) rows.add(p.periodDate);
+    return rows.size;
+  })() + " periods" +
+    (slotData.unit ? " \u00b7 unit: " + slotData.unit : "");
 }
 
 function downloadBlob(blob, filename) {
@@ -7420,7 +7596,7 @@ async function buildReport() {
     page.appendChild(img);
   }
 
-  const table = document.getElementById("dataTable");
+  const table = document.querySelector("#dtTables .data-table");
   if (table && table.querySelector("thead")) {
     const wrap = document.createElement("div");
     wrap.className = "report-table-wrap";

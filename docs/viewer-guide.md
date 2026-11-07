@@ -115,9 +115,11 @@ Leaving the label field empty draws the line with no text: `3510 |`
 ## Traces and highlighting
 
 - Click a **trace in any chart**, or a **column header in the data table** —
-  the same trace highlights in every chart (others dim), the table shows only
-  that trace's column, and scatter data tables filter to that row. Click again
-  to clear.
+  the same trace highlights in every chart (others dim), scatter data tables
+  filter to that row, and the data table below switches to showing that
+  trace's data for **every slot plotted on the page** (one table group per
+  slot, slot name and unit in the heading). Click again to clear and restore
+  the full table.
 - Deterministic Max/Min/Most traces are excluded from condition checks and
   percentile bands, matching the App.
 
@@ -145,6 +147,15 @@ is highlighted, the table filters to that trace's row.
 ---
 
 ## Custom table presets
+
+Clicking a table preset replaces the charts with its table blocks (the data
+table below the charts is a plot-page feature and is hidden here). Every block
+has an on-page **Filter & aggregate** panel — rows type, statistic, trace
+filter, year range, month filter, and WY/CY total-column toggles — so you can
+re-aggregate and filter the table live. Panel adjustments are session-level
+(the saved preset keeps its defaults; use Reset preset to restore them).
+Preset-level **value conditions** (set in the Preset Builder) stay active and
+blank out trace/year combinations that do not match.
 
 Table presets are composed of one or more table blocks. Each block:
 
