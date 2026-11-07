@@ -6,37 +6,42 @@
 <title>CRMMS ESP Preset Plots</title>
 <style>
   :root {
-    --ink: #24343d;
-    --ink-soft: #44565f;
-    --ink-faint: #718087;
-    --line: #d7dee2;
+    --ink: #122331;
+    --ink-soft: #334957;
+    --ink-faint: #6b7f8b;
+    --line: #dbe5e9;
+    --line-soft: #eaf0f2;
     --panel: #ffffff;
-    --bg: #f2f5f7;
+    --bg: #f7fafb;
     --accent: #167c80;
-    --warn: #b3620f;
-    --error: #c0392b;
+    --warn: #ad6a20;
+    --error: #a84d4d;
     --ok: #2e7d43;
+    --shadow-sm: 0 8px 24px rgba(28, 56, 70, .08);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    background: var(--bg);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(circle at 8% 3%, rgba(22, 124, 128, .09), transparent 25rem),
+      linear-gradient(180deg, #f7fafb 0, #f3f7f8 42rem, #f7fafb 100%);
     color: var(--ink);
     font-size: 13px;
     padding-bottom: 48px;
+    -webkit-font-smoothing: antialiased;
   }
   header {
-    background: var(--panel);
-    border-bottom: 1px solid var(--line);
+    background: rgba(250, 252, 252, .86);
+    border-bottom: 1px solid rgba(219, 229, 233, .9);
     padding: 14px 22px 12px;
   }
   header h1 {
     margin: 0;
-    font-size: 19px;
-    font-weight: 600;
-    color: #2b3b43;
-    letter-spacing: 0.01em;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.02em;
   }
   header .tagline {
     margin-top: 3px;
@@ -54,13 +59,13 @@
     padding: 3px 12px;
     width: fit-content;
   }
-  .wrap { max-width: 1500px; margin: 0 auto; padding: 0 22px; }
+  .wrap { max-width: 1220px; margin: 0 auto; padding: 0 22px; }
 
   #statusPanel { margin-top: 14px; }
   .status-card {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 10px 14px;
     margin-bottom: 12px;
     font-size: 12.5px;
@@ -77,7 +82,7 @@
     display: none;
     margin-top: 16px;
     border: 2px dashed #a9bcc4;
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--panel);
     padding: 42px 20px;
     text-align: center;
@@ -123,14 +128,15 @@
   #plotGrid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    gap: 16px;
   }
   @media (max-width: 1200px) { #plotGrid { grid-template-columns: 1fr; } }
   .plot-card {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 6px 8px 2px;
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    padding: 8px;
     min-width: 0;
   }
   .plot-card .plot-slot-warning {
@@ -156,7 +162,7 @@
     margin: 0 0 14px;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 9px 12px;
     font-size: 12px;
     color: var(--ink-soft);
@@ -190,34 +196,43 @@
   .add-pop label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
 
   .card-head {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    padding: 8px 10px 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 8px 8px;
+    border-bottom: 1px solid var(--line-soft);
+    background: #fbfcfc;
+    border-radius: 8px 8px 0 0;
   }
-  .card-head .card-controls { flex: 1; min-width: 0; }
-  .card-head summary { font-size: 11.5px; font-weight: 600; color: var(--ink-faint); }
-  .card-head summary:hover { color: var(--accent); }
+  .plot-card-slot { min-width: 160px; flex: 1; overflow: hidden; }
+  .plot-card-slot strong {
+    display: block; font: 600 12px/1.25 "Segoe UI", Tahoma, sans-serif;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-soft);
+  }
+  .plot-card-slot small {
+    display: block; margin-top: 2px; color: var(--ink-faint);
+    font: 400 9px/1.2 "Segoe UI", Tahoma, sans-serif;
+  }
   .card-year {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 11px; color: var(--ink-faint);
-    margin-left: auto; margin-right: 8px;
-    white-space: nowrap;
+    display: grid; gap: 2px; flex: none;
+    font: 600 9px/1.15 "Segoe UI", Tahoma, sans-serif;
+    color: var(--ink-faint); text-transform: uppercase; letter-spacing: .02em;
   }
   .card-year select {
-    font-family: inherit; font-size: 11.5px; color: var(--ink);
-    border: 1px solid var(--line); border-radius: 5px;
-    padding: 2px 5px; background: #fff;
+    min-width: 92px; border: 1px solid var(--line); border-radius: 7px;
+    background: #fff; color: var(--ink-soft); padding: 5px 7px;
+    font: 400 10px/1.2 "Segoe UI", Tahoma, sans-serif; text-transform: none; letter-spacing: 0;
   }
   .card-remove {
-    flex: none; margin-left: 10px;
-    font-family: inherit; font-size: 11px; font-weight: 600;
-    color: var(--ink-faint); background: none;
-    border: 1px solid transparent; border-radius: 5px;
-    padding: 2px 7px; cursor: pointer;
+    flex: none; align-self: end; height: 29px;
+    font: 600 10px "Segoe UI", Tahoma, sans-serif;
+    color: #8c3f3f; background: #fff4f4; border: 1px solid #edd0d0;
+    border-radius: 7px; padding: 5px 9px; cursor: pointer;
   }
-  .card-remove:hover { color: var(--error); border-color: #e5b5b0; }
+  .card-remove:hover { background: #ffecec; }
+  .plot-display-settings { margin: 8px; border: 1px solid var(--line-soft); border-radius: 10px; background: #fbfcfc; }
+  .plot-display-settings > summary { padding: 9px 11px; font-weight: 800; cursor: pointer; font-size: 11.5px; color: var(--ink-soft); }
   .control-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 7px 14px; padding: 8px 2px 6px;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px; padding: 4px 11px 12px;
   }
   .control-grid label {
     display: flex; flex-direction: column; gap: 2px;
@@ -236,13 +251,25 @@
 
   /* zero-data / no-trace note inside plot cards */
   .plot-note {
-    margin: 8px 12px 0;
+    margin: 0 8px 8px;
     padding: 8px 12px;
-    background: #fdf6ec;
+    background: #fff3df;
     border: 1px solid #ecd9b0;
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--warn);
     font-size: 12px;
+  }
+
+  /* keep Plotly's SVG text visually light, as the App does (styles.css:1103) */
+  .plot-area .gtitle, .plot-area .xtitle, .plot-area .ytitle,
+  .plot-area .annotation-text, .plot-area .legendtext, .plot-area .hovertext,
+  .plot-area .xtick text, .plot-area .ytick text {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
+    font-weight: 400 !important;
+    font-style: normal !important;
+    text-shadow: none !important;
+    stroke: none !important;
+    stroke-width: 0 !important;
   }
 
   /* linked highlight hint */
@@ -259,7 +286,8 @@
     margin-top: 22px;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
     padding: 12px 14px;
   }
   .dt-head { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -280,12 +308,12 @@
   }
   #dataTable thead th {
     position: sticky; top: 0; z-index: 2;
-    background: #f2f5f7; font-weight: 600; color: var(--ink-soft);
+    background: #eef3f4; font-weight: 600; color: var(--ink-soft);
     cursor: pointer; user-select: none;
   }
   #dataTable td.period, #dataTable th.period {
     position: sticky; left: 0; z-index: 1;
-    background: #f2f5f7; font-weight: 600; text-align: left;
+    background: #eef3f4; font-weight: 600; text-align: left;
     cursor: default; user-select: none;
   }
   #dataTable thead th.period { z-index: 3; }
@@ -6146,12 +6174,21 @@ function renderPlotCard(cardEl, rawItem, preset) {
 
   const head = document.createElement("div");
   head.className = "card-head";
-  const details = document.createElement("details");
-  details.className = "card-controls";
-  const summary = document.createElement("summary");
-  summary.textContent = "Plot settings";
-  details.appendChild(summary);
-  head.appendChild(details);
+
+  // slot title block (App's .plot-card-slot)
+  const slotBlock = document.createElement("div");
+  slotBlock.className = "plot-card-slot";
+  const slotTitle = document.createElement("strong");
+  slotTitle.textContent = item.title || item.slot;
+  slotTitle.title = item.slot;
+  const slotSmall = document.createElement("small");
+  slotSmall.textContent = item.plot_type === "scatter"
+    ? item.slot + " \u00b7 " + (TRANSFORM_LABELS[item.scatter_x_transform] || item.scatter_x_transform) +
+      " / " + (TRANSFORM_LABELS[item.scatter_y_transform] || item.scatter_y_transform)
+    : item.slot + " \u00b7 " + (TRANSFORM_LABELS[item.transform] || item.transform);
+  slotBlock.appendChild(slotTitle);
+  slotBlock.appendChild(slotSmall);
+  head.appendChild(slotBlock);
 
   // on-plot year selector for year-sum bar/stacked/scatter plots
   const yearOptions = missing.length ? null : yearOptionsFor(item);
@@ -6213,6 +6250,13 @@ function renderPlotCard(cardEl, rawItem, preset) {
     return;
   }
 
+  // boxed Plot settings panel (App's .plot-display-settings)
+  const details = document.createElement("details");
+  details.className = "plot-display-settings";
+  const summary = document.createElement("summary");
+  summary.textContent = "Plot settings";
+  details.appendChild(summary);
+  cardEl.appendChild(details);
   buildCardControls(cardEl, details, item, preset, [...model.slots.keys()]);
   const plotDiv = document.createElement("div");
   plotDiv.className = "plot-area";
