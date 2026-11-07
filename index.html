@@ -6353,7 +6353,14 @@ function updateHighlightHint() {
     el.classList.add("active");
     const label = (model && model.labels.get(highlightedTrace)) || traceLabel(highlightedTrace);
     el.textContent = "Highlighted: " + label + " (trace " + highlightedTrace + ") \u2014 click it again to clear";
+    el.style.cursor = "pointer";
+    el.title = "Click to clear the highlight";
   }
+}
+
+function clearHighlight() {
+  highlightedTrace = null;
+  refreshHighlight();
 }
 
 function renderPlotCard(cardEl, rawItem, preset) {
@@ -6564,6 +6571,7 @@ function normalizeTableBlock(block) {
     : String(b.filters.months || "").split(/[ ,;]+/).map(Number).filter(m => Number.isFinite(m) && m >= 1 && m <= 12);
   b.filters.conditions = Array.isArray(b.filters.conditions) ? b.filters.conditions : [];
   b.filters.logic = b.filters.logic === "any" ? "any" : "all";
+  b.pageFilter = Object.assign({ op: "<", value: "" }, b.pageFilter || {});
   b.wyTotals = !!b.wyTotals;
   b.cyTotals = !!b.cyTotals;
   b.decimals = Number.isFinite(Number(b.decimals)) ? Number(b.decimals) : 2;
@@ -6838,6 +6846,9 @@ function renderTableBlock(section, rawBlock) {
       "), keeping only matching trace/year combinations. Edit them in the Preset Builder.";
     pGrid.appendChild(condNote);
   }
+  // on-page value filter: cells not meeting the threshold are blanked
+  pGrid.appendChild(tableControlWrap("Value filter", tableControlSelect("pageFilterOp", [["<", "<"], ["<=", "≤"], [">", ">"], [">=", "≥"], ["=", "="], ["!=", "≠"]], block.pageFilter.op)));
+  pGrid.appendChild(tableControlWrap("Filter value (empty = off)", tableControlInput("pageFilterValue", block.pageFilter.value)));
   panel.appendChild(pGrid);
   panel.querySelectorAll("[data-tfield]").forEach(el => {
     el.addEventListener("change", () => {
@@ -6845,6 +6856,7 @@ function renderTableBlock(section, rawBlock) {
       if (f === "wyTotals" || f === "cyTotals") section._block[f] = el.checked;
       else if (f === "traces" || f === "logic") section._block.filters[f] = el.value;
       else if (f === "yearFrom" || f === "yearTo" || f === "months") section._block.filters[f] = el.value;
+      else if (f === "pageFilterOp" || f === "pageFilterValue") section._block.pageFilter[f === "pageFilterOp" ? "op" : "value"] = el.value;
       else section._block[f] = el.value;
       renderTableBlock(section, section._block);  // panel state preserved via section._filtersOpen
     });
@@ -6898,6 +6910,14 @@ function renderTableBlock(section, rawBlock) {
       totalsByTrace.get(tr.traceNumber).set(t.basis, sums);
     }
   }
+
+  // on-page value filter: cells that do not meet the threshold are blanked
+  const pfActive = block.pageFilter.value !== "" && Number.isFinite(Number(block.pageFilter.value));
+  const cellVisible = (tn, rowYear, v) => {
+    if (kept && !kept.pairs.has(tn + "::" + rowYear)) return false;
+    if (pfActive && !(v != null && Number.isFinite(v) && valuePass(v, { op: block.pageFilter.op, value: Number(block.pageFilter.value) }))) return false;
+    return true;
+  };
 
   const fmt = v => (v == null || !Number.isFinite(v)) ? "\u2014"
     : v.toLocaleString("en-US", { minimumFractionDigits: block.decimals, maximumFractionDigits: block.decimals });
@@ -6962,11 +6982,12 @@ function renderTableBlock(section, rawBlock) {
     rowEl.appendChild(td0);
     for (const tr of traces) {
       const vals = g.values.get(tr.traceNumber) || [];
-      const td = document.createElement("td");
+      const v = block.rows === "monthly" ? (vals.length ? vals[0] : null) : statApply(block.stat, vals);
       const pairKey = tr.traceNumber + "::" + meta.rowYear;
       const pairBlank = kept && !kept.pairs.has(pairKey);
-      td.textContent = pairBlank ? "\u2014"
-        : fmt(block.rows === "monthly" ? (vals.length ? vals[0] : null) : statApply(block.stat, vals));
+      const pageBlank = pfActive && !(v != null && Number.isFinite(v) && valuePass(v, { op: block.pageFilter.op, value: Number(block.pageFilter.value) }));
+      const td = document.createElement("td");
+      td.textContent = (pairBlank || pageBlank) ? "—" : fmt(v);
       if (highlightedTrace === tr.traceNumber) td.classList.add("dt-hl");
       rowEl.appendChild(td);
       for (const t of totalCols) {
@@ -7262,6 +7283,7 @@ function setupToolbar() {
     refreshHighlight();
   });
   document.getElementById("buildReportBtn").addEventListener("click", () => { buildReport(); });
+  document.getElementById("highlightInfo").addEventListener("click", clearHighlight);
   document.getElementById("addFilesBtn").addEventListener("click", () => document.getElementById("fileInput").click());
   document.getElementById("reportCloseBtn").addEventListener("click", closeReport);
   document.getElementById("reportPrintBtn").addEventListener("click", () => window.print());
@@ -7402,21 +7424,69 @@ function renderDataTable() {
   section.classList.toggle("dt-highlight", isHighlight);
 
   if (isHighlight) {
-    // App behavior: a selected trace shows its data for EVERY slot plotted on
-    // the page, one table group per slot
+    // App behavior: a selected trace shows a single combined table with one
+    // column per plotted slot, so Powell and Mead values sit side by side
     host.innerHTML = "";
-    const names = plottedSlots();
     const trLabel = (model.labels.get(highlightedTrace) || traceLabel(highlightedTrace)) + " (" + highlightedTrace + ")";
-    let groupCount = 0;
-    for (const name of names) {
+    const groups = [];
+    for (const name of plottedSlots()) {
       const slotData = model.slots.get(name);
       const tr = slotData.traces.find(t => t.traceNumber === highlightedTrace);
       if (!tr) continue;
-      groupCount++;
-      host.appendChild(buildDataTableGroup(slotData, [tr], name, highlightedTrace));
+      groups.push({ name: name, slotData: slotData, points: tr.points });
     }
-    info.textContent = "Showing " + trLabel + " across " + groupCount + " plotted slot" +
-      (groupCount === 1 ? "" : "s") + " \u2014 clear the selection to restore the full table";
+    const rowMap = new Map();
+    for (const g of groups) {
+      for (const p of g.points) {
+        const key = p.periodDate || p.timestep || String(p.idx);
+        let row = rowMap.get(key);
+        if (!row) {
+          row = { key: key, label: periodLabel(p), vals: new Map() };
+          rowMap.set(key, row);
+        }
+        row.vals.set(g.name, p.value);
+      }
+    }
+    const rows = [...rowMap.values()].sort((a, b) => String(a.key).localeCompare(String(b.key), undefined, { numeric: true }));
+
+    const table = document.createElement("table");
+    table.className = "data-table";
+    const thead = document.createElement("thead");
+    const hr = document.createElement("tr");
+    const th0 = document.createElement("th");
+    th0.className = "period";
+    th0.textContent = "Period";
+    hr.appendChild(th0);
+    for (const g of groups) {
+      const th = document.createElement("th");
+      th.textContent = g.name;
+      hr.appendChild(th);
+    }
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    for (const row of rows) {
+      const rowEl = document.createElement("tr");
+      const td0 = document.createElement("td");
+      td0.className = "period";
+      td0.textContent = row.label;
+      rowEl.appendChild(td0);
+      for (const g of groups) {
+        const td = document.createElement("td");
+        td.textContent = fmtVal(row.vals.get(g.name));
+        rowEl.appendChild(td);
+      }
+      tbody.appendChild(rowEl);
+    }
+    table.appendChild(tbody);
+    const scroll = document.createElement("div");
+    scroll.className = "dt-scroll";
+    scroll.appendChild(table);
+    host.appendChild(scroll);
+
+    info.textContent = "Showing " + trLabel + " across " + groups.length + " plotted slot" +
+      (groups.length === 1 ? "" : "s") + " — clear the selection to restore the full table";
     return;
   }
 
