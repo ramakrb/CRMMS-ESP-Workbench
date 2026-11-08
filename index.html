@@ -406,13 +406,14 @@
   }
   #dtInfo { font-size: 11.5px; color: var(--ink-faint); }
   .dt-scroll { overflow: auto; max-height: 480px; border: 1px solid var(--line); border-radius: 6px; }
-  #dataTable { border-collapse: separate; border-spacing: 0; font-size: 11px; }
-  #dataTable th, #dataTable td {
+  #dataTable, .scatter-points-table { border-collapse: separate; border-spacing: 0; font-size: 11px; }
+  #dataTable th, #dataTable td, .scatter-points-table th, .scatter-points-table td {
     padding: 3px 9px;
-    border-bottom: 1px solid #eef2f4;
-    border-right: 1px solid #f0f4f6;
+    border-bottom: 1px solid #e7edf0;   /* subtle row line */
+    border-right: 1px solid #eef2f4;    /* subtle column separator */
     white-space: nowrap;
   }
+  #dataTable thead th, .scatter-points-table thead th { border-bottom: 1px solid #dce4e8; }
   .data-table thead th, .scatter-points-table thead th {
     position: sticky; top: 0; z-index: 2;
     background: #eef3f4; font-weight: 600; color: var(--ink-soft);
@@ -421,6 +422,7 @@
   .data-table td.period, .data-table th.period, .scatter-points-table td.period, .scatter-points-table th.period {
     position: sticky; left: 0; z-index: 1;
     background: #eef3f4; font-weight: 600; text-align: left;
+    border-right: 1px solid #dce4e8;   /* separate the sticky period column from the values */
     cursor: default; user-select: none;
   }
   .data-table thead th.period { z-index: 3; }
