@@ -118,9 +118,9 @@ Leaving the label field empty draws the line with no text: `3510 |`
 - Click a **trace in any chart**, or a **column header in the data table** —
   the same trace highlights in every chart (others dim), scatter data tables
   filter to that row, and the data table below switches to showing that
-  trace's data for **every slot plotted on the page** (one table group per
-  slot, slot name and unit in the heading). Click again to clear and restore
-  the full table.
+  trace's data for **every slot plotted on the page** — including charts you
+  added with *Add plot* (one table group per slot, slot name and unit in the
+  heading). Click again to clear and restore the full table.
 - Deterministic Max/Min/Most traces are excluded from condition checks and
   percentile bands, matching the App.
 
@@ -139,13 +139,23 @@ Below the charts: period rows × trace columns for the selected slot
 ### Selecting cells (Excel-style)
 
 In every data table — the main data table, the highlight view, scatter data
-tables, and Slot Analysis tables — you can **drag across value cells** to
-select a rectangle. A status bar appears at the bottom-right showing
-**N, Sum, Average, Min and Max** for the selected values (blank cells are
-excluded; stats reflect the values as displayed, e.g. after ÷1,000 scaling).
+tables, and Slot Analysis tables — you can select cells like in Excel:
+
+- **Drag across value cells** to select a rectangle.
+- **Click or drag on a period (row header) cell** to select whole rows —
+  contiguous rows by dragging.
+- **Ctrl+click or Ctrl+drag on a column header** to select whole columns;
+  Ctrl+click again on a selected column to toggle it off. Plain header clicks
+  keep their usual behavior (trace highlight).
+- **Ctrl+click / Ctrl+drag** adds extra regions, so selections can mix
+  distinct rows, columns and rectangles.
+
+A status bar appears at the bottom-right showing **N, Sum, Average, Min and
+Max** for all selected values (blank cells are excluded; stats reflect the
+values as displayed, e.g. after ÷1,000 scaling).
 
 - **Copy** (or `Ctrl+C`) places the selected cells on the clipboard as TSV —
-  paste straight into Excel.
+  paste straight into Excel (multiple regions copy as separate blocks).
 - **Esc** or the ✕ button clears the selection.
 - A plain click (no drag) keeps its usual behavior, e.g. highlighting a trace.
 

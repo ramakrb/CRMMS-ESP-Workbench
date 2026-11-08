@@ -7082,16 +7082,6 @@ function renderTableBlock(section, rawBlock) {
   enableTableCellSelection(table);
   scroll.appendChild(table);
 
-  // row click -> visual row selection (period cell only; value cells stay
-  // reserved for trace highlighting)
-  tbody.addEventListener("click", e => {
-    const periodCell = e.target.closest("td.period");
-    if (!periodCell) return;
-    const rowEl = periodCell.parentElement;
-    rowEl.classList.toggle("row-selected");
-    [...tbody.children].forEach(r => { if (r !== rowEl) r.classList.remove("row-selected"); });
-  });
-
   // actions: copy + CSV
   const actionsBar = document.createElement("div");
   actionsBar.className = "scatter-data-actions";
@@ -7418,8 +7408,11 @@ function plottedSlots() {
     const dtSlot = document.getElementById("dtSlot");
     return dtSlot && dtSlot.value && model && model.slots.has(dtSlot.value) ? [dtSlot.value] : [];
   }
+  // presetItems() honors per-session overrides: added plots, removed plots,
+  // and slot changes made in Plot settings — the highlight view must show
+  // every slot currently on the page
   const names = [];
-  for (const item of currentPreset.plots) {
+  for (const item of presetItems(currentPreset)) {
     for (const n of [item.slot, item.y_slot, ...(item.plot_slots || [])]) {
       if (n && model.slots.has(n) && !names.includes(n)) names.push(n);
     }
@@ -7495,16 +7488,6 @@ function buildDataTableGroup(slotData, traces, headingName, highlightTrace) {
   }
   table.appendChild(tbody);
 
-  // row click -> visual row selection (period cell; value cells handle trace
-  // highlighting via the #dtTables delegation)
-  tbody.addEventListener("click", e => {
-    const periodCell = e.target.closest("td.period");
-    if (!periodCell) return;
-    const rowEl = periodCell.parentElement;
-    rowEl.classList.toggle("row-selected");
-    [...tbody.children].forEach(r => { if (r !== rowEl) r.classList.remove("row-selected"); });
-  });
-
   enableTableCellSelection(table);
   scroll.appendChild(table);
   wrap.appendChild(scroll);
@@ -7555,7 +7538,7 @@ function fallbackCopy(text) {
   } catch (err) { return false; }
 }
 
-const cellSelection = { table: null, painted: [], rect: null };
+const cellSelection = { table: null, regions: [], painted: [] };
 let cellStatsBar = null;
 
 function cellStatsBarEl() {
@@ -7586,45 +7569,64 @@ function cellStatsBarEl() {
 function clearCellSelection() {
   for (const el of cellSelection.painted) el.classList.remove("cell-sel");
   cellSelection.painted = [];
-  cellSelection.rect = null;
+  cellSelection.regions = [];
   cellSelection.table = null;
   const bar = cellStatsBar;
   if (bar) bar.classList.remove("on");
 }
 
-/* rectangle {r0,c0,r1,c1} in tbody row / cell indices */
-function paintCellSelection(table, rect) {
+/* regions: [{r0,c0,r1,c1}] in tbody row / cell indices (column 0 = period) */
+function paintCellSelection() {
   for (const el of cellSelection.painted) el.classList.remove("cell-sel");
   cellSelection.painted = [];
+  const table = cellSelection.table;
+  if (!table) return;
   const body = table.tBodies[0];
   if (!body) return;
-  const r0 = Math.min(rect.r0, rect.r1), r1 = Math.max(rect.r0, rect.r1);
-  const c0 = Math.min(rect.c0, rect.c1), c1 = Math.max(rect.c0, rect.c1);
-  for (let r = r0; r <= r1 && r < body.rows.length; r++) {
-    const cells = body.rows[r].cells;
-    for (let c = c0; c <= c1 && c < cells.length; c++) {
-      const td = cells[c];
-      if (td.classList.contains("period")) continue;
-      td.classList.add("cell-sel");
-      cellSelection.painted.push(td);
+  const seen = new Set();
+  for (const rect of cellSelection.regions) {
+    const r0 = Math.min(rect.r0, rect.r1), r1 = Math.max(rect.r0, rect.r1);
+    const c0 = Math.min(rect.c0, rect.c1), c1 = Math.max(rect.c0, rect.c1);
+    for (let r = r0; r <= r1 && r < body.rows.length; r++) {
+      const cells = body.rows[r].cells;
+      for (let c = c0; c <= c1 && c < cells.length; c++) {
+        const key = r + ":" + c;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        cells[c].classList.add("cell-sel");
+        cellSelection.painted.push(cells[c]);
+      }
     }
   }
 }
 
-function selectionStats(table, rect) {
+function eachSelectedCell(cb) {
+  const table = cellSelection.table;
+  if (!table) return;
   const body = table.tBodies[0];
-  const r0 = Math.min(rect.r0, rect.r1), r1 = Math.max(rect.r0, rect.r1);
-  const c0 = Math.min(rect.c0, rect.c1), c1 = Math.max(rect.c0, rect.c1);
-  const values = [];
-  for (let r = r0; r <= r1 && r < body.rows.length; r++) {
-    const cells = body.rows[r].cells;
-    for (let c = c0; c <= c1 && c < cells.length; c++) {
-      const td = cells[c];
-      if (td.classList.contains("period")) continue;
-      const v = parseCellNumber(td.textContent);
-      if (v != null) values.push(v);
+  if (!body) return;
+  const seen = new Set();
+  for (const rect of cellSelection.regions) {
+    const r0 = Math.min(rect.r0, rect.r1), r1 = Math.max(rect.r0, rect.r1);
+    const c0 = Math.min(rect.c0, rect.c1), c1 = Math.max(rect.c0, rect.c1);
+    for (let r = r0; r <= r1 && r < body.rows.length; r++) {
+      const cells = body.rows[r].cells;
+      for (let c = c0; c <= c1 && c < cells.length; c++) {
+        const key = r + ":" + c;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        cb(cells[c]);
+      }
     }
   }
+}
+
+function selectionStats() {
+  const values = [];
+  eachSelectedCell(td => {
+    const v = parseCellNumber(td.textContent);
+    if (v != null) values.push(v);
+  });
   const n = values.length;
   const sum = n ? values.reduce((a, b) => a + b, 0) : null;
   return {
@@ -7636,23 +7638,33 @@ function selectionStats(table, rect) {
   };
 }
 
-function selectionTsv(table, rect) {
+function selectionTsv() {
+  /* each region becomes its own TSV block (Excel multi-area style) */
+  const table = cellSelection.table;
+  if (!table) return "";
   const body = table.tBodies[0];
-  const r0 = Math.min(rect.r0, rect.r1), r1 = Math.max(rect.r0, rect.r1);
-  const c0 = Math.min(rect.c0, rect.c1), c1 = Math.max(rect.c0, rect.c1);
-  const lines = [];
-  for (let r = r0; r <= r1 && r < body.rows.length; r++) {
-    const cells = body.rows[r].cells;
-    const row = [];
-    for (let c = c0; c <= c1 && c < cells.length; c++) row.push(cells[c].textContent.trim());
-    lines.push(row.join("\t"));
+  if (!body) return "";
+  const blocks = [];
+  const regions = [...cellSelection.regions].sort((a, b) =>
+    (Math.min(a.r0, a.r1) - Math.min(b.r0, b.r1)) || (Math.min(a.c0, a.c1) - Math.min(b.c0, b.c1)));
+  for (const rect of regions) {
+    const r0 = Math.min(rect.r0, rect.r1), r1 = Math.max(rect.r0, rect.r1);
+    const c0 = Math.min(rect.c0, rect.c1), c1 = Math.max(rect.c0, rect.c1);
+    const lines = [];
+    for (let r = r0; r <= r1 && r < body.rows.length; r++) {
+      const cells = body.rows[r].cells;
+      const row = [];
+      for (let c = c0; c <= c1 && c < cells.length; c++) row.push(cells[c].textContent.trim());
+      lines.push(row.join("\t"));
+    }
+    if (lines.length) blocks.push(lines.join("\r\n"));
   }
-  return lines.join("\r\n");
+  return blocks.join("\r\n");
 }
 
 function copyCellSelection() {
-  if (!cellSelection.table || !cellSelection.rect) return;
-  const tsv = selectionTsv(cellSelection.table, cellSelection.rect);
+  if (!cellSelection.table || !cellSelection.regions.length) return;
+  const tsv = selectionTsv();
   const bar = cellStatsBarEl();
   copyTextToClipboard(tsv, ok => {
     const btn = bar.querySelector("#cellCopySel");
@@ -7662,9 +7674,8 @@ function copyCellSelection() {
 }
 
 function showCellStats() {
-  const { table, rect } = cellSelection;
-  if (!table || !rect) return;
-  const s = selectionStats(table, rect);
+  if (!cellSelection.table || !cellSelection.regions.length) return;
+  const s = selectionStats();
   const bar = cellStatsBarEl();
   bar.querySelector("#cellStatsText").textContent =
     "N: " + s.n +
@@ -7673,43 +7684,146 @@ function showCellStats() {
   bar.classList.add("on");
 }
 
+/* Excel-style selection on any data table:
+ * - drag value cells            -> rectangular selection (plain = replace, ctrl = add)
+ * - ctrl+click / ctrl+drag on a column header -> select columns (plain click keeps
+ *   its existing behavior, e.g. trace highlight)
+ * - click / drag on a period (row header) cell -> select rows
+ * The status bar shows N / Sum / Avg / Min / Max; Copy (or Ctrl+C) exports the
+ * selection as TSV; Esc clears. */
 function enableTableCellSelection(table) {
   if (!table || table.__cellSel) return;
   table.__cellSel = true;
+
+  const suppressNextClick = () => {
+    table.addEventListener("click", ev => { ev.stopPropagation(); ev.preventDefault(); }, { capture: true, once: true });
+  };
+  const rectBounds = rect => ({
+    r0: Math.min(rect.r0, rect.r1), r1: Math.max(rect.r0, rect.r1),
+    c0: Math.min(rect.c0, rect.c1), c1: Math.max(rect.c0, rect.c1),
+  });
+  const sameRect = (a, b) => {
+    const x = rectBounds(a), y = rectBounds(b);
+    return x.r0 === y.r0 && x.r1 === y.r1 && x.c0 === y.c0 && x.c1 === y.c1;
+  };
+
   table.addEventListener("mousedown", e => {
-    const td = e.target.closest("td");
-    if (!td || td.classList.contains("period") || !table.contains(td)) return;
-    e.preventDefault();  // no native text selection while dragging
-    clearCellSelection();
+    const ctrl = e.ctrlKey || e.metaKey;
     const body = table.tBodies[0];
-    const row = td.parentElement;
-    cellSelection.table = table;
-    cellSelection.rect = { r0: row.rowIndex - 1, c0: td.cellIndex, r1: row.rowIndex - 1, c1: td.cellIndex };
-    const anchor = { r: row.rowIndex - 1, c: td.cellIndex };
+    if (!body) return;
+    const lastRow = body.rows.length - 1;
+    const lastCol = body.rows[0] ? body.rows[0].cells.length - 1 : 0;
+    const td = e.target.closest("td");
+    const th = e.target.closest("th");
+    const colRect = col => ({ r0: 0, c0: col, r1: lastRow, c1: col });
+    const rowRect = row => ({ r0: row, c0: 0, r1: row, c1: lastCol });
+    const baseRegions = () => (cellSelection.table === table ? cellSelection.regions.map(r => ({ ...r })) : []);
+    const fire = (kind, rect) => {  // replace or extend the selection, repaint, update stats
+      cellSelection.table = table;
+      cellSelection.regions = kind === "add" ? baseRegions().concat([rect]) : [rect];
+      paintCellSelection();
+      showCellStats();
+    };
+    if (!td && !th) return;
+
+    /* ---- column header: ctrl+click / ctrl+drag selects whole columns ---- */
+    if (th) {
+      if (th.classList.contains("period") || !ctrl) return;  // plain click = existing behavior
+      e.preventDefault();
+      const anchorCol = th.cellIndex;
+      let rect = colRect(anchorCol);
+      let moved = false;
+      let toggledOff = false;
+      // ctrl+click on an already-selected column toggles it off (unless dragging)
+      const prevRegions = baseRegions();
+      const existing = prevRegions.find(r => sameRect(r, rect));
+      const onMove = ev => {
+        const h = ev.target.closest("th");
+        if (!h || !table.contains(h) || h.classList.contains("period")) return;
+        const col = h.cellIndex;
+        if (col === anchorCol && !moved) return;
+        moved = true;
+        toggledOff = false;
+        rect = { r0: 0, c0: Math.min(anchorCol, col), r1: lastRow, c1: Math.max(anchorCol, col) };
+        fire("replace", rect);
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove, true);
+        document.removeEventListener("mouseup", onUp, true);
+        if (!moved) {
+          if (existing) {
+            cellSelection.table = table;
+            cellSelection.regions = prevRegions.filter(r => r !== existing);
+            paintCellSelection();
+            if (cellSelection.regions.length) showCellStats(); else clearCellSelection();
+          } else {
+            fire("add", rect);
+          }
+        }
+        suppressNextClick();  // keep the plain-click trace toggle out of column selection
+      };
+      document.addEventListener("mousemove", onMove, true);
+      document.addEventListener("mouseup", onUp, true);
+      return;
+    }
+
+    /* ---- period (row header) cell: click / drag selects whole rows ---- */
+    if (td.classList.contains("period")) {
+      e.preventDefault();
+      const anchorRow = td.parentElement.rowIndex - 1;
+      let rect = rowRect(anchorRow);
+      let moved = false;
+      const onMove = ev => {
+        const d = ev.target.closest("td.period");
+        if (!d || !table.contains(d)) return;
+        const r = d.parentElement.rowIndex - 1;
+        if (r === anchorRow && !moved) return;
+        moved = true;
+        rect = { r0: Math.min(anchorRow, r), c0: 0, r1: Math.max(anchorRow, r), c1: lastCol };
+        fire(ctrl ? "add" : "replace", rect);
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove, true);
+        document.removeEventListener("mouseup", onUp, true);
+        if (!moved) fire(ctrl ? "add" : "replace", rect);
+        showCellStats();
+      };
+      document.addEventListener("mousemove", onMove, true);
+      document.addEventListener("mouseup", onUp, true);
+      return;
+    }
+
+    /* ---- value cell: drag selects a rectangle ---- */
+    e.preventDefault();
+    const anchor = { r: td.parentElement.rowIndex - 1, c: td.cellIndex };
+    let rect = { r0: anchor.r, c0: anchor.c, r1: anchor.r, c1: anchor.c };
     let moved = false;
     const onMove = ev => {
-      const cur = ev.target.closest("td");
-      if (!cur || !table.contains(cur) || cur.classList.contains("period")) return;
-      const r = cur.parentElement.rowIndex - 1;
-      const c = cur.cellIndex;
-      if (r === anchor.r && c === anchor.c) return;
+      const d = ev.target.closest("td");
+      if (!d || !table.contains(d) || d.classList.contains("period")) return;
+      const r = d.parentElement.rowIndex - 1;
+      const c = d.cellIndex;
+      if (r === anchor.r && c === anchor.c && !moved) return;
       moved = true;
-      cellSelection.rect = { r0: anchor.r, c0: anchor.c, r1: r, c1: c };
-      paintCellSelection(table, cellSelection.rect);
-      showCellStats();
+      rect = { r0: Math.min(anchor.r, r), c0: Math.min(anchor.c, c), r1: Math.max(anchor.r, r), c1: Math.max(anchor.c, c) };
+      fire(ctrl ? "add" : "replace", rect);
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove, true);
       document.removeEventListener("mouseup", onUp, true);
       if (!moved) {
-        // plain click — keep existing behavior (e.g. trace highlight)
-        clearCellSelection();
+        if (ctrl) {  // ctrl+click adds a single cell (no trace toggle)
+          fire("add", rect);
+          suppressNextClick();
+        } else {
+          clearCellSelection();  // plain click keeps its existing behavior
+        }
         return;
       }
       showCellStats();
-      // the browser fires click on the cell where drag ended — suppress it so
-      // the delegated trace-highlight handler does not also toggle
-      table.addEventListener("click", ev => { ev.stopPropagation(); ev.preventDefault(); }, { capture: true, once: true });
+      // the browser fires click where the drag ended — suppress it so the
+      // delegated trace-highlight handler does not also toggle
+      suppressNextClick();
     };
     document.addEventListener("mousemove", onMove, true);
     document.addEventListener("mouseup", onUp, true);
