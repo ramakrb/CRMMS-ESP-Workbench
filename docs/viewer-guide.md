@@ -136,6 +136,19 @@ Below the charts: period rows × trace columns for the selected slot
 - Click a column to highlight that trace everywhere.
 - Values respect each slot's units and scale.
 
+### Selecting cells (Excel-style)
+
+In every data table — the main data table, the highlight view, scatter data
+tables, and Slot Analysis tables — you can **drag across value cells** to
+select a rectangle. A status bar appears at the bottom-right showing
+**N, Sum, Average, Min and Max** for the selected values (blank cells are
+excluded; stats reflect the values as displayed, e.g. after ÷1,000 scaling).
+
+- **Copy** (or `Ctrl+C`) places the selected cells on the clipboard as TSV —
+  paste straight into Excel.
+- **Esc** or the ✕ button clears the selection.
+- A plain click (no drag) keeps its usual behavior, e.g. highlighting a trace.
+
 ---
 
 ## Scatter data tables
