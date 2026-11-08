@@ -29,8 +29,9 @@ Two bars sit above the charts:
 
 - **Plots** — the saved plot preset groups (e.g. *Powell + Mead Elevations*,
   *Powell Inflow PE*, *LC Evap*). Clicking one renders its chart cards.
-- **Tables** — the saved custom table presets. Clicking one renders its table
-  blocks in place of the charts; click a plot preset to switch back.
+- **Tables** — the saved table presets (e.g. *Slot Analysis*). Clicking one
+  renders its table blocks in place of the charts; click a plot preset to
+  switch back.
 
 ---
 
@@ -149,40 +150,53 @@ is highlighted, the table filters to that trace's row.
 ## Custom table presets
 
 Clicking a table preset replaces the charts with its table blocks (the data
-table below the charts is a plot-page feature and is hidden here). Every block
-has an on-page **Filter & aggregate** panel — rows type, statistic, trace
-filter, year range, month filter, and WY/CY total-column toggles — so you can
-re-aggregate and filter the table live. Panel adjustments are session-level
-(the saved preset keeps its defaults; use Reset preset to restore them).
+table below the charts is a plot-page feature and is hidden here). The shipped
+**Slot Analysis** preset starts with a monthly *Powell.Pool Elevation* table;
+everything about each block can be changed live on the page.
+
+### Filter & aggregate panel
+
+Every table block has a **Filter & aggregate** panel:
+
+- **Slot** — analyze any slot from the loaded RDF files.
+- **Rows** — *Monthly values* (raw value per month), *Water-year aggregation*
+  (Oct–Sep), *Calendar-year aggregation*, or *Annual values* (annual slots).
+  When an aggregation is selected, each year shows **only the aggregated
+  value** — no monthly rows, no total columns.
+- **Statistic (per year)** — Sum, Average, Minimum, Maximum, or End of period
+  (e.g. the September value of a water year). Slots where a sum is meaningless
+  — *Pool Elevation, Storage, Surface Area, Power Plant Cap Fraction, Peak
+  Flow* — offer no Sum option and default to **End of period**; flow and
+  volume slots can be summed.
+- **WY sum / CY sum columns** — optional total columns for monthly tables
+  (hidden while aggregating; off by default).
+- **Traces** — currently visible / ensemble only / all traces.
+- **Year from / Year to** — limit rows to a period range.
+- **Months** — pick a single month for monthly tables.
+- **Value filter** — filters the **value shown** (the monthly value, or the
+  per-year aggregated value). Operators include `<`, `≤`, `>`, `≥`, `=`, `≠`
+  and **between** (a range — enter both values). Leave the value empty to
+  turn the filter off.
+- **Filter mode** — *Filter out non-matching* blanks the cells that do not
+  meet the criteria, or *Highlight matching* keeps every value and marks the
+  matching cells in amber.
+
 Preset-level **value conditions** (set in the Preset Builder) stay active and
-blank out trace/year combinations that do not match.
+blank out trace/year combinations that do not match. Deterministic
+Max/Min/Most traces are always excluded from condition checks.
 
-Table presets are composed of one or more table blocks. Each block:
+### Adding more tables
 
-- Picks a **slot** and a **row type**: *Monthly values*, *Water-year
-  aggregation* (one row per water year, Oct–Sep), *Calendar-year aggregation*,
-  or *Annual values* (for annual-timestep slots).
-- Picks a **statistic** for aggregated rows: Sum, Average, Minimum, Maximum, or
-  End of period (e.g. the September value of a water year).
-- Optionally appends **WY sum / CY sum total columns** to monthly tables.
-- Filters:
-  - **Traces** — currently visible / ensemble only / all traces.
-  - **Year from / Year to** — limit rows to a period range.
-  - **Month filter** — e.g. `10,11,12` for winter months (monthly tables).
-  - **Value conditions** — App-style rules that keep only matching
-    trace-and-year combinations. Each condition: a slot, a calculation
-    (individual values, CY/WY sum, average, min, max), an operator
-    (`<`, `<=`, `>`, `>=`, `=`, `!=`, `between`), a value, an optional month,
-    and an optional year list. Multiple conditions combine with **ALL** or
-    **ANY**. Cells that do not match are blanked; rows and columns with no
-    matches disappear. Deterministic Max/Min/Most traces are always excluded
-    from condition checks.
+The **+ Add slot table** control above the tables appends another table block
+with the same options (slot picker, rows, statistic, filters, value filter).
+Added tables are session-level — switching presets clears them.
 
 Example: *keep traces whose Powell.Inflow water-year sum is below 9,500,000
-acre-feet* — add a condition with slot `Powell.Inflow`, calculation
-`WY sum`, operator `<`, value `9500000`.
+acre-feet* — add a value condition in the Preset Builder with slot
+`Powell.Inflow`, calculation `WY sum`, operator `<`, value `9500000`.
 
-Every table has **Copy for Excel** and **Download CSV** buttons.
+Every table has **Copy for Excel** and **Download CSV** buttons (the export
+matches what the table shows, including filter blanking).
 
 ---
 

@@ -413,6 +413,7 @@
   .data-table td:not(.period):hover, .scatter-points-table td:not(.period):hover { background: #eef4f5; }
   .data-table .dt-hl, .scatter-points-table .dt-hl { background: rgba(22, 124, 128, 0.16); color: #0e4f52; font-weight: 700; }
   .data-table thead th.dt-hl, .scatter-points-table thead th.dt-hl { background: rgba(22, 124, 128, 0.3); }
+  .scatter-points-table td.page-hl { background: rgba(243, 156, 18, 0.3); font-weight: 600; }
   .data-table .dt-dim, .scatter-points-table .dt-dim { color: #aeb8bd; background: #fafbfc; font-weight: 400; }
 
   /* ---- printable report overlay ---- */
@@ -4786,35 +4787,24 @@ if (window.__EXTRA_PRESETS__) PRESETS.push(...window.__EXTRA_PRESETS__);
 
 const TABLE_PRESETS = /* TABLE_PRESETS:START */[
   {
-    "id": "powell-elevation-tables",
-    "name": "Powell Pool Elevation Tables",
-    "description": "Monthly values with WY totals, plus end-of-September elevation by water year",
+    "id": "slot-analysis",
+    "name": "Slot Analysis",
+    "description": "Analyze any slot: monthly values or per-year aggregation (WY/CY). Elevations, storage, area, cap fraction and peak flow aggregate as end-of-period; flow/volume slots can be summed. Filter or highlight values directly on the table.",
     "tables": [
       {
         "slot": "Powell.Pool Elevation",
         "rows": "monthly",
-        "stat": "sum",
-        "wyTotals": true,
-        "cyTotals": false,
-        "title": "Monthly Pool Elevation",
-        "decimals": 2,
-        "filters": {
-          "traces": "visible",
-          "yearFrom": "",
-          "yearTo": "",
-          "months": [],
-          "conditions": [],
-          "logic": "all"
-        }
-      },
-      {
-        "slot": "Powell.Pool Elevation",
-        "rows": "water_year",
         "stat": "end",
         "wyTotals": false,
         "cyTotals": false,
-        "title": "End-of-September Elevation by Water Year",
+        "title": "",
         "decimals": 2,
+        "pageFilter": {
+          "op": "<",
+          "value": "",
+          "value2": "",
+          "mode": "filter"
+        },
         "filters": {
           "traces": "visible",
           "yearFrom": "",
@@ -4822,40 +4812,6 @@ const TABLE_PRESETS = /* TABLE_PRESETS:START */[
           "months": [],
           "conditions": [],
           "logic": "all"
-        }
-      }
-    ]
-  },
-  {
-    "id": "inflow-wy-conditions",
-    "name": "CY Inflow (Low Outflow Years)",
-    "description": "Calendar-year inflow sums, keeping only traces whose Powell.Inflow WY sum is below 9,500,000",
-    "tables": [
-      {
-        "slot": "Powell.Inflow",
-        "rows": "calendar_year",
-        "stat": "sum",
-        "wyTotals": false,
-        "cyTotals": false,
-        "title": "CY Inflow Sum",
-        "decimals": 0,
-        "filters": {
-          "traces": "visible",
-          "yearFrom": "",
-          "yearTo": "",
-          "months": [],
-          "logic": "all",
-          "conditions": [
-            {
-              "slot": "Powell.Inflow",
-              "calculation": "water_sum",
-              "op": "<",
-              "value": "9500000",
-              "value2": "",
-              "month": "0",
-              "years": "2024, 2025, 2026, 2027, 2028"
-            }
-          ]
         }
       }
     ]
@@ -6561,17 +6517,31 @@ const TABLE_ROWS_LABELS = {
   annual: "Annual values",
 };
 
+/* Volume-in-time slots that must never be summed (a sum of elevations,
+ * storages in an area sense, etc. is meaningless) — these default to
+ * end-of-period aggregation instead. */
+const NON_SUM_SLOT_PATTERNS = [
+  "pool elevation", "storage", "surface area",
+  "power plant cap fraction", "peak flow",
+];
+function slotAllowsSum(slotName) {
+  const n = String(slotName || "").toLowerCase();
+  return !NON_SUM_SLOT_PATTERNS.some(p => n.includes(p));
+}
+
 function normalizeTableBlock(block) {
   const b = Object.assign({}, block);
   b.rows = ["monthly", "water_year", "calendar_year", "annual"].indexOf(b.rows) >= 0 ? b.rows : "monthly";
   b.stat = ["sum", "avg", "min", "max", "end"].indexOf(b.stat) >= 0 ? b.stat : "sum";
+  if (b.stat === "sum" && !slotAllowsSum(b.slot)) b.stat = "end";  // elevations etc. are never summed
   b.filters = Object.assign({ traces: "visible", yearFrom: "", yearTo: "", months: [], conditions: [], logic: "all" }, b.filters || {});
   b.filters.months = Array.isArray(b.filters.months)
     ? b.filters.months.map(Number).filter(m => m >= 1 && m <= 12)
     : String(b.filters.months || "").split(/[ ,;]+/).map(Number).filter(m => Number.isFinite(m) && m >= 1 && m <= 12);
   b.filters.conditions = Array.isArray(b.filters.conditions) ? b.filters.conditions : [];
   b.filters.logic = b.filters.logic === "any" ? "any" : "all";
-  b.pageFilter = Object.assign({ op: "<", value: "" }, b.pageFilter || {});
+  b.pageFilter = Object.assign({ op: "<", value: "", value2: "", mode: "filter" }, b.pageFilter || {});
+  if (b.pageFilter.mode !== "highlight") b.pageFilter.mode = "filter";
   b.wyTotals = !!b.wyTotals;
   b.cyTotals = !!b.cyTotals;
   b.decimals = Number.isFinite(Number(b.decimals)) ? Number(b.decimals) : 2;
@@ -6739,11 +6709,12 @@ function newTableBlock(slot) {
   return {
     slot: slot || "",
     rows: "monthly",
-    stat: "sum",
+    stat: slotAllowsSum(slot) ? "sum" : "end",  // elevations etc. default to end of period
     wyTotals: false,
     cyTotals: false,
     title: "",
     decimals: 2,
+    pageFilter: { op: "<", value: "", value2: "", mode: "filter" },
     filters: { traces: "visible", yearFrom: "", yearTo: "", months: "", conditions: [], logic: "all" },
   };
 }
@@ -6807,9 +6778,19 @@ function renderTableBlock(section, rawBlock) {
   const pGrid = document.createElement("div");
   pGrid.className = "filters-grid";
   const isMonthly = block.rows === "monthly";
+  const allowsSum = slotAllowsSum(block.slot);
   const slotNames = [...model.slots.keys()];
   pGrid.appendChild(tableControlWrap("Slot", tableControlSelect("slot", slotNames.map(s => [s, s]), block.slot)));
-  const statWrap = tableControlWrap("Statistic", tableControlSelect("stat", [["sum", "Sum"], ["avg", "Average"], ["min", "Minimum"], ["max", "Maximum"], ["end", "End of period"]], block.stat));
+  pGrid.appendChild(tableControlWrap("Rows", tableControlSelect("rows", [
+    ["monthly", "Monthly values"],
+    ["water_year", "Water-year aggregation (Oct\u2013Sep)"],
+    ["calendar_year", "Calendar-year aggregation"],
+    ["annual", "Annual values (annual slots)"],
+  ], block.rows)));
+  // aggregated rows show only the per-year statistic; monthly rows show raw values
+  const statOptions = [["avg", "Average"], ["min", "Minimum"], ["max", "Maximum"], ["end", "End of period"]];
+  if (allowsSum) statOptions.unshift(["sum", "Sum"]);  // elevations, storage, area, cap fraction, peak flow: never summed
+  const statWrap = tableControlWrap("Statistic (per year)", tableControlSelect("stat", statOptions, block.stat));
   if (isMonthly) statWrap.style.display = "none";
   pGrid.appendChild(statWrap);
   // year/month dropdowns populated from the slot's own data
@@ -6837,7 +6818,7 @@ function renderTableBlock(section, rawBlock) {
   cyLbl.appendChild(document.createTextNode(" CY sum column (monthly tables)"));
   totalsRow.appendChild(wyLbl);
   totalsRow.appendChild(cyLbl);
-  pGrid.appendChild(totalsRow);
+  if (isMonthly) pGrid.appendChild(totalsRow);  // total columns are a monthly-table feature
   if (block.filters.conditions && block.filters.conditions.length) {
     const condNote = document.createElement("div");
     condNote.className = "hint";
@@ -6846,9 +6827,18 @@ function renderTableBlock(section, rawBlock) {
       "), keeping only matching trace/year combinations. Edit them in the Preset Builder.";
     pGrid.appendChild(condNote);
   }
-  // on-page value filter: cells not meeting the threshold are blanked
-  pGrid.appendChild(tableControlWrap("Value filter", tableControlSelect("pageFilterOp", [["<", "<"], ["<=", "≤"], [">", ">"], [">=", "≥"], ["=", "="], ["!=", "≠"]], block.pageFilter.op)));
+  // on-page value filter — applies to the value shown (monthly value, or the
+  // per-year aggregation): non-matching cells are blanked, or matching cells
+  // are highlighted when mode is "highlight"
+  pGrid.appendChild(tableControlWrap("Value filter", tableControlSelect("pageFilterOp", [["<", "<"], ["<=", "≤"], [">", ">"], [">=", "≥"], ["=", "="], ["!=", "≠"], ["between", "between"]], block.pageFilter.op)));
   pGrid.appendChild(tableControlWrap("Filter value (empty = off)", tableControlInput("pageFilterValue", block.pageFilter.value)));
+  const pf2Wrap = tableControlWrap("and value (between)", tableControlInput("pageFilterValue2", block.pageFilter.value2));
+  if (block.pageFilter.op !== "between") pf2Wrap.style.display = "none";
+  pGrid.appendChild(pf2Wrap);
+  pGrid.appendChild(tableControlWrap("Filter mode", tableControlSelect("pageFilterMode", [
+    ["filter", "Filter out non-matching"],
+    ["highlight", "Highlight matching"],
+  ], block.pageFilter.mode)));
   panel.appendChild(pGrid);
   panel.querySelectorAll("[data-tfield]").forEach(el => {
     el.addEventListener("change", () => {
@@ -6856,7 +6846,10 @@ function renderTableBlock(section, rawBlock) {
       if (f === "wyTotals" || f === "cyTotals") section._block[f] = el.checked;
       else if (f === "traces" || f === "logic") section._block.filters[f] = el.value;
       else if (f === "yearFrom" || f === "yearTo" || f === "months") section._block.filters[f] = el.value;
-      else if (f === "pageFilterOp" || f === "pageFilterValue") section._block.pageFilter[f === "pageFilterOp" ? "op" : "value"] = el.value;
+      else if (f === "pageFilterOp") { section._block.pageFilter.op = el.value; if (el.value !== "between") section._block.pageFilter.value2 = ""; }
+      else if (f === "pageFilterValue") section._block.pageFilter.value = el.value;
+      else if (f === "pageFilterValue2") section._block.pageFilter.value2 = el.value;
+      else if (f === "pageFilterMode") section._block.pageFilter.mode = el.value;
       else section._block[f] = el.value;
       renderTableBlock(section, section._block);  // panel state preserved via section._filtersOpen
     });
@@ -6911,13 +6904,15 @@ function renderTableBlock(section, rawBlock) {
     }
   }
 
-  // on-page value filter: cells that do not meet the threshold are blanked
-  const pfActive = block.pageFilter.value !== "" && Number.isFinite(Number(block.pageFilter.value));
-  const cellVisible = (tn, rowYear, v) => {
-    if (kept && !kept.pairs.has(tn + "::" + rowYear)) return false;
-    if (pfActive && !(v != null && Number.isFinite(v) && valuePass(v, { op: block.pageFilter.op, value: Number(block.pageFilter.value) }))) return false;
-    return true;
-  };
+  // on-page value filter — filter mode blanks cells that do not meet the
+  // criteria; highlight mode marks the matching cells instead
+  const pfCond = () => ({ op: block.pageFilter.op, value: Number(block.pageFilter.value), value2: Number(block.pageFilter.value2) });
+  const pfOn = block.pageFilter.value !== "" && (block.pageFilter.op === "between"
+    ? (Number.isFinite(Number(block.pageFilter.value)) && Number.isFinite(Number(block.pageFilter.value2)))
+    : Number.isFinite(Number(block.pageFilter.value)));
+  const pfBlanking = block.pageFilter.mode !== "highlight";
+  const pfPass = v => pfOn && v != null && Number.isFinite(v) && valuePass(v, pfCond());
+  const pfBlank = v => pfOn && pfBlanking && !pfPass(v);
 
   const fmt = v => (v == null || !Number.isFinite(v)) ? "\u2014"
     : v.toLocaleString("en-US", { minimumFractionDigits: block.decimals, maximumFractionDigits: block.decimals });
@@ -6985,9 +6980,9 @@ function renderTableBlock(section, rawBlock) {
       const v = block.rows === "monthly" ? (vals.length ? vals[0] : null) : statApply(block.stat, vals);
       const pairKey = tr.traceNumber + "::" + meta.rowYear;
       const pairBlank = kept && !kept.pairs.has(pairKey);
-      const pageBlank = pfActive && !(v != null && Number.isFinite(v) && valuePass(v, { op: block.pageFilter.op, value: Number(block.pageFilter.value) }));
       const td = document.createElement("td");
-      td.textContent = (pairBlank || pageBlank) ? "—" : fmt(v);
+      td.textContent = (pairBlank || pfBlank(v)) ? "—" : fmt(v);
+      if (pfOn && !pfBlanking && pfPass(v)) td.classList.add("page-hl");
       if (highlightedTrace === tr.traceNumber) td.classList.add("dt-hl");
       rowEl.appendChild(td);
       for (const t of totalCols) {
@@ -7044,7 +7039,8 @@ function renderTableBlock(section, rawBlock) {
         const vals = g.values.get(tr.traceNumber) || [];
         const pairKey = tr.traceNumber + "::" + rowYear;
         const pairBlank = kept && !kept.pairs.has(pairKey);
-        row.push(pairBlank ? "\u2014" : (block.rows === "monthly" ? (vals[0] != null ? fmt(vals[0]) : "\u2014") : fmt(statApply(block.stat, vals))));
+        const shown = block.rows === "monthly" ? (vals.length ? vals[0] : null) : statApply(block.stat, vals);
+        row.push((pairBlank || pfBlank(shown)) ? "\u2014" : fmt(shown));
         for (const t of totalCols) {
           const sums = totalsByTrace.get(tr.traceNumber) && totalsByTrace.get(tr.traceNumber).get(t.basis);
           const y = t.basis === "water" ? wy : rowYear;
@@ -7133,7 +7129,7 @@ function renderTablePresetBar() {
   const bar = document.getElementById("tablePresetBar");
   if (!TABLE_PRESETS.length) { bar.style.display = "none"; return; }
   bar.style.display = "flex";
-  bar.innerHTML = '<span class="bar-label">Slot table filters</span>';
+  bar.innerHTML = '<span class="bar-label">Tables</span>';
   TABLE_PRESETS.forEach((preset, idx) => {
     const btn = document.createElement("button");
     btn.textContent = preset.name || preset.id;
