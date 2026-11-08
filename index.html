@@ -181,14 +181,24 @@
   .dt-slot-heading small { font-weight: 400; color: var(--ink-faint); }
   .filters-panel { margin: 8px; border: 1px solid var(--line-soft); border-radius: 10px; background: #fbfcfc; }
   .filters-panel > summary { padding: 8px 11px; font-weight: 800; cursor: pointer; font-size: 11.5px; color: var(--ink-soft); }
-  .filters-grid { display: flex; flex-wrap: wrap; gap: 9px 18px; align-items: end; padding: 4px 11px 12px; }
-  .filters-grid label { display: grid; gap: 3px; font-size: 10px; font-weight: 700; color: var(--ink-faint); flex: 0 0 auto; }
+  /* compact 6-column layout: controls hug the left in ~2 rows */
+  .filters-grid { display: grid; grid-template-columns: repeat(6, max-content); gap: 8px 10px; align-items: end; justify-content: start; padding: 4px 11px 12px; }
+  .filters-grid label { display: grid; gap: 3px; font-size: 10px; font-weight: 700; color: var(--ink-faint); }
   .filters-grid select, .filters-grid input {
     font-family: inherit; font-size: 11.5px; color: var(--ink);
-    border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: #fff; width: auto;
+    border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: #fff;
   }
-  .filters-grid .check-row { display: flex; gap: 12px; align-items: center; font-size: 11.5px; color: var(--ink-soft); font-weight: 400; text-transform: none; }
+  .filters-grid .check-row { display: flex; gap: 5px; align-items: center; font-size: 11.5px; color: var(--ink-soft); font-weight: 400; text-transform: none; white-space: nowrap; }
   .filters-grid .check-row input { width: auto; }
+  .filters-grid [data-tfield="slot"] { width: 200px; }
+  .filters-grid [data-tfield="rows"] { width: 165px; }
+  .filters-grid [data-tfield="stat"] { width: 120px; }
+  .filters-grid [data-tfield="traces"] { width: 130px; }
+  .filters-grid [data-tfield="yearFrom"], .filters-grid [data-tfield="yearTo"] { width: 78px; }
+  .filters-grid [data-tfield="months"] { width: 115px; }
+  .filters-grid [data-tfield="pageFilterOp"] { width: 72px; }
+  .filters-grid [data-tfield="pageFilterValue"], .filters-grid [data-tfield="pageFilterValue2"] { width: 90px; }
+  .filters-grid [data-tfield="pageFilterMode"] { width: 145px; }
   .data-table tr.row-selected td, .data-table tr.row-selected th, .scatter-points-table tr.row-selected td, .scatter-points-table tr.row-selected th { background: #e4f3f1 !important; }
   .data-table td.period { cursor: pointer; }
   #presetBar .preset-desc {
@@ -6783,9 +6793,9 @@ function renderTableBlock(section, rawBlock) {
   pGrid.appendChild(tableControlWrap("Slot", tableControlSelect("slot", slotNames.map(s => [s, s]), block.slot)));
   pGrid.appendChild(tableControlWrap("Rows", tableControlSelect("rows", [
     ["monthly", "Monthly values"],
-    ["water_year", "Water-year aggregation (Oct\u2013Sep)"],
-    ["calendar_year", "Calendar-year aggregation"],
-    ["annual", "Annual values (annual slots)"],
+    ["water_year", "Water-year (Oct\u2013Sep)"],
+    ["calendar_year", "Calendar-year"],
+    ["annual", "Annual values"],
   ], block.rows)));
   // aggregated rows show only the per-year statistic; monthly rows show raw values
   const statOptions = [["avg", "Average"], ["min", "Minimum"], ["max", "Maximum"], ["end", "End of period"]];
@@ -6803,22 +6813,20 @@ function renderTableBlock(section, rawBlock) {
   pGrid.appendChild(tableControlWrap("Year from", tableControlSelect("yearFrom", yearOpts, block.filters.yearFrom)));
   pGrid.appendChild(tableControlWrap("Year to", tableControlSelect("yearTo", yearOpts, block.filters.yearTo)));
   pGrid.appendChild(tableControlWrap("Months", tableControlSelect("months", monthOpts, monthsValue)));
-  const totalsRow = document.createElement("div");
-  totalsRow.className = "check-row";
-  totalsRow.style.gridColumn = "1 / -1";
+  // total-column checkboxes sit directly in the grid (monthly tables only)
   const wyCheck = tableControlInput("wyTotals", block.wyTotals, "checkbox");
   const cyCheck = tableControlInput("cyTotals", block.cyTotals, "checkbox");
   const wyLbl = document.createElement("label");
   wyLbl.className = "check-row";
+  wyLbl.title = "Append each trace's water-year total as an extra column (monthly tables only)";
   wyLbl.appendChild(wyCheck);
-  wyLbl.appendChild(document.createTextNode(" WY sum column (monthly tables)"));
+  wyLbl.appendChild(document.createTextNode("WY sum"));
   const cyLbl = document.createElement("label");
   cyLbl.className = "check-row";
+  cyLbl.title = "Append each trace's calendar-year total as an extra column (monthly tables only)";
   cyLbl.appendChild(cyCheck);
-  cyLbl.appendChild(document.createTextNode(" CY sum column (monthly tables)"));
-  totalsRow.appendChild(wyLbl);
-  totalsRow.appendChild(cyLbl);
-  if (isMonthly) pGrid.appendChild(totalsRow);  // total columns are a monthly-table feature
+  cyLbl.appendChild(document.createTextNode("CY sum"));
+  if (isMonthly) { pGrid.appendChild(wyLbl); pGrid.appendChild(cyLbl); }
   if (block.filters.conditions && block.filters.conditions.length) {
     const condNote = document.createElement("div");
     condNote.className = "hint";
@@ -6830,13 +6838,18 @@ function renderTableBlock(section, rawBlock) {
   // on-page value filter — applies to the value shown (monthly value, or the
   // per-year aggregation): non-matching cells are blanked, or matching cells
   // are highlighted when mode is "highlight"
-  pGrid.appendChild(tableControlWrap("Value filter", tableControlSelect("pageFilterOp", [["<", "<"], ["<=", "≤"], [">", ">"], [">=", "≥"], ["=", "="], ["!=", "≠"], ["between", "between"]], block.pageFilter.op)));
-  pGrid.appendChild(tableControlWrap("Filter value (empty = off)", tableControlInput("pageFilterValue", block.pageFilter.value)));
-  const pf2Wrap = tableControlWrap("and value (between)", tableControlInput("pageFilterValue2", block.pageFilter.value2));
+  const pfOpWrap = tableControlWrap("Value filter", tableControlSelect("pageFilterOp", [["<", "<"], ["<=", "≤"], [">", ">"], [">=", "≥"], ["=", "="], ["!=", "≠"], ["between", "between"]], block.pageFilter.op));
+  pfOpWrap.title = "Filters the value shown (monthly value, or per-year aggregation)";
+  pGrid.appendChild(pfOpWrap);
+  const pfValWrap = tableControlWrap("Filter value", tableControlInput("pageFilterValue", block.pageFilter.value));
+  pfValWrap.title = "Empty = filter off";
+  pGrid.appendChild(pfValWrap);
+  const pf2Wrap = tableControlWrap("and value", tableControlInput("pageFilterValue2", block.pageFilter.value2));
+  pf2Wrap.title = "Second bound for the between operator";
   if (block.pageFilter.op !== "between") pf2Wrap.style.display = "none";
   pGrid.appendChild(pf2Wrap);
   pGrid.appendChild(tableControlWrap("Filter mode", tableControlSelect("pageFilterMode", [
-    ["filter", "Filter out non-matching"],
+    ["filter", "Filter non-matching"],
     ["highlight", "Highlight matching"],
   ], block.pageFilter.mode)));
   panel.appendChild(pGrid);
