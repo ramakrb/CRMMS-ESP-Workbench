@@ -168,6 +168,12 @@ Every table block has a **Filter & aggregate** panel:
   — *Pool Elevation, Storage, Surface Area, Power Plant Cap Fraction, Peak
   Flow* — offer no Sum option and default to **End of period**; flow and
   volume slots can be summed.
+- **Decimals** — decimal places shown; `0` rounds every value to the nearest
+  integer.
+- **Divide by** — rescale displayed values: Raw, ÷ 1,000, or ÷ 1,000,000
+  (e.g. acre-ft/month inflow sums shown in million acre-ft). Applied to the
+  value cells, total columns, and the CSV export; the value filter compares
+  the rescaled values you see. The table heading notes the scaling.
 - **WY sum / CY sum columns** — optional total columns for monthly tables
   (hidden while aggregating; off by default).
 - **Traces** — currently visible / ensemble only / all traces.

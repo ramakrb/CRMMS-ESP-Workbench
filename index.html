@@ -181,8 +181,8 @@
   .dt-slot-heading small { font-weight: 400; color: var(--ink-faint); }
   .filters-panel { margin: 8px; border: 1px solid var(--line-soft); border-radius: 10px; background: #fbfcfc; }
   .filters-panel > summary { padding: 8px 11px; font-weight: 800; cursor: pointer; font-size: 11.5px; color: var(--ink-soft); }
-  /* compact 6-column layout: controls hug the left in ~2 rows */
-  .filters-grid { display: grid; grid-template-columns: repeat(6, max-content); gap: 8px 10px; align-items: end; justify-content: start; padding: 4px 11px 12px; }
+  /* compact 7-column layout: controls hug the left in ~2 rows */
+  .filters-grid { display: grid; grid-template-columns: repeat(7, max-content); gap: 8px 10px; align-items: end; justify-content: start; padding: 4px 11px 12px; }
   .filters-grid label { display: grid; gap: 3px; font-size: 10px; font-weight: 700; color: var(--ink-faint); }
   .filters-grid select, .filters-grid input {
     font-family: inherit; font-size: 11.5px; color: var(--ink);
@@ -197,6 +197,8 @@
   .filters-grid [data-tfield="yearFrom"], .filters-grid [data-tfield="yearTo"] { width: 78px; }
   .filters-grid [data-tfield="months"] { width: 115px; }
   .filters-grid [data-tfield="pageFilterOp"] { width: 72px; }
+  .filters-grid [data-tfield="decimals"] { width: 64px; }
+  .filters-grid [data-tfield="scale"] { width: 115px; }
   .filters-grid [data-tfield="pageFilterValue"], .filters-grid [data-tfield="pageFilterValue2"] { width: 90px; }
   .filters-grid [data-tfield="pageFilterMode"] { width: 145px; }
   .data-table tr.row-selected td, .data-table tr.row-selected th, .scatter-points-table tr.row-selected td, .scatter-points-table tr.row-selected th { background: #e4f3f1 !important; }
@@ -6552,6 +6554,7 @@ function normalizeTableBlock(block) {
   b.filters.logic = b.filters.logic === "any" ? "any" : "all";
   b.pageFilter = Object.assign({ op: "<", value: "", value2: "", mode: "filter" }, b.pageFilter || {});
   if (b.pageFilter.mode !== "highlight") b.pageFilter.mode = "filter";
+  b.scale = [1, 1000, 1000000].includes(Number(b.scale)) ? Number(b.scale) : 1;  // display divisor
   b.wyTotals = !!b.wyTotals;
   b.cyTotals = !!b.cyTotals;
   b.decimals = Number.isFinite(Number(b.decimals)) ? Number(b.decimals) : 2;
@@ -6724,6 +6727,7 @@ function newTableBlock(slot) {
     cyTotals: false,
     title: "",
     decimals: 2,
+    scale: 1,
     pageFilter: { op: "<", value: "", value2: "", mode: "filter" },
     filters: { traces: "visible", yearFrom: "", yearTo: "", months: "", conditions: [], logic: "all" },
   };
@@ -6797,6 +6801,12 @@ function renderTableBlock(section, rawBlock) {
     ["calendar_year", "Calendar-year"],
     ["annual", "Annual values"],
   ], block.rows)));
+  const decWrap = tableControlWrap("Decimals", tableControlSelect("decimals", [["0", "0"], ["1", "1"], ["2", "2"], ["3", "3"]], String(block.decimals)));
+  decWrap.title = "Decimal places shown (0 = round to the nearest integer)";
+  pGrid.appendChild(decWrap);
+  const scaleWrap = tableControlWrap("Divide by", tableControlSelect("scale", [["1", "Raw"], ["1000", "\u00f7 1,000"], ["1000000", "\u00f7 1,000,000"]], String(block.scale || 1)));
+  scaleWrap.title = "Rescale displayed values (e.g. acre-ft \u2192 thousand acre-ft). The value filter compares the rescaled values.";
+  pGrid.appendChild(scaleWrap);
   // aggregated rows show only the per-year statistic; monthly rows show raw values
   const statOptions = [["avg", "Average"], ["min", "Minimum"], ["max", "Maximum"], ["end", "End of period"]];
   if (allowsSum) statOptions.unshift(["sum", "Sum"]);  // elevations, storage, area, cap fraction, peak flow: never summed
@@ -6863,6 +6873,7 @@ function renderTableBlock(section, rawBlock) {
       else if (f === "pageFilterValue") section._block.pageFilter.value = el.value;
       else if (f === "pageFilterValue2") section._block.pageFilter.value2 = el.value;
       else if (f === "pageFilterMode") section._block.pageFilter.mode = el.value;
+      else if (f === "decimals" || f === "scale") section._block[f] = Number(el.value);
       else section._block[f] = el.value;
       renderTableBlock(section, section._block);  // panel state preserved via section._filtersOpen
     });
@@ -6886,10 +6897,12 @@ function renderTableBlock(section, rawBlock) {
 
   const unit = slotData.unit || "Value";
   const statText = block.rows === "monthly" ? "" : " \u00b7 " + (TABLE_STAT_LABELS[block.stat] || block.stat);
+  const scaleText = (block.scale || 1) > 1 ? " \u00b7 values \u00f7 " + Number(block.scale).toLocaleString("en-US") : "";
   head.innerHTML =
     "<strong>" + escapeHtml(block.title || block.slot) + "</strong>" +
     '<span class="table-block-sub">' + escapeHtml(block.slot) + " \u00b7 " +
     (TABLE_ROWS_LABELS[block.rows] || block.rows) + statText + " \u00b7 unit: " + escapeHtml(unit) +
+    scaleText +
     " \u00b7 " + traces.length + " traces</span>";
 
   const built = tableRowGroups(slotData, block, traces);
@@ -6927,6 +6940,8 @@ function renderTableBlock(section, rawBlock) {
   const pfPass = v => pfOn && v != null && Number.isFinite(v) && valuePass(v, pfCond());
   const pfBlank = v => pfOn && pfBlanking && !pfPass(v);
 
+  const scaleDiv = block.scale || 1;
+  const scaled = v => (v == null || !Number.isFinite(v)) ? v : v / scaleDiv;
   const fmt = v => (v == null || !Number.isFinite(v)) ? "\u2014"
     : v.toLocaleString("en-US", { minimumFractionDigits: block.decimals, maximumFractionDigits: block.decimals });
 
@@ -6994,8 +7009,9 @@ function renderTableBlock(section, rawBlock) {
       const pairKey = tr.traceNumber + "::" + meta.rowYear;
       const pairBlank = kept && !kept.pairs.has(pairKey);
       const td = document.createElement("td");
-      td.textContent = (pairBlank || pfBlank(v)) ? "—" : fmt(v);
-      if (pfOn && !pfBlanking && pfPass(v)) td.classList.add("page-hl");
+      const sv = scaled(v);
+      td.textContent = (pairBlank || pfBlank(sv)) ? "—" : fmt(sv);
+      if (pfOn && !pfBlanking && pfPass(sv)) td.classList.add("page-hl");
       if (highlightedTrace === tr.traceNumber) td.classList.add("dt-hl");
       rowEl.appendChild(td);
       for (const t of totalCols) {
@@ -7004,7 +7020,7 @@ function renderTableBlock(section, rawBlock) {
         const sums = totalsByTrace.get(tr.traceNumber) && totalsByTrace.get(tr.traceNumber).get(t.basis);
         const y = t.basis === "water" ? meta.wy : meta.rowYear;
         const v = sums ? sums.get(y) : null;
-        tdT.textContent = (v == null || !Number.isFinite(v)) ? "\u2014" : fmt(v);
+        tdT.textContent = (v == null || !Number.isFinite(v)) ? "\u2014" : fmt(scaled(v));
         rowEl.appendChild(tdT);
       }
       tbody.appendChild(rowEl);
@@ -7052,13 +7068,13 @@ function renderTableBlock(section, rawBlock) {
         const vals = g.values.get(tr.traceNumber) || [];
         const pairKey = tr.traceNumber + "::" + rowYear;
         const pairBlank = kept && !kept.pairs.has(pairKey);
-        const shown = block.rows === "monthly" ? (vals.length ? vals[0] : null) : statApply(block.stat, vals);
+        const shown = scaled(block.rows === "monthly" ? (vals.length ? vals[0] : null) : statApply(block.stat, vals));
         row.push((pairBlank || pfBlank(shown)) ? "\u2014" : fmt(shown));
         for (const t of totalCols) {
           const sums = totalsByTrace.get(tr.traceNumber) && totalsByTrace.get(tr.traceNumber).get(t.basis);
           const y = t.basis === "water" ? wy : rowYear;
           const v = sums && sums.get(y);
-          row.push((v == null || !Number.isFinite(v)) ? "\u2014" : fmt(v));
+          row.push((v == null || !Number.isFinite(v)) ? "\u2014" : fmt(scaled(v)));
         }
       }
       lines.push(row);
