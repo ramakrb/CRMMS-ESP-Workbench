@@ -5938,6 +5938,7 @@ let sessionTableBlocks = [];
 /* per-page-session table state: blockKey -> normalized block (panel edits
  * survive switching between table pages and plot presets; cleared on reload) */
 const tableBlockSession = new Map();
+const removedPresetBlocks = new Set();  // preset blocks hidden for this session via Remove
 let sessionBlockUid = 0;  // stable keys for added tables (removal must not reshuffle state)
 let viewMode = "plots";  // "plots" | "tables"
 let toolbarWired = false;
@@ -6780,15 +6781,21 @@ function renderTableBlock(section, rawBlock) {
   section.appendChild(head);
 
   const slotData = model.slots.get(block.slot);
-  const addRemoveBtn = () => {  // session-added tables can be removed (state persists per session)
-    if (!section._isSession) return;
+  const addRemoveBtn = () => {  // every table can be removed for this session
     const rm = document.createElement("button");
     rm.type = "button";
     rm.className = "mini-button table-remove";
     rm.textContent = "Remove";
+    rm.title = section._isSession
+      ? "Remove this added table (this session)"
+      : "Hide this table for this session — reload the page to restore it";
     rm.addEventListener("click", () => {
-      const i = sessionTableBlocks.findIndex(b => b.__uid === Number(String(section._blockKey).slice("session#".length)));
-      if (i >= 0) sessionTableBlocks.splice(i, 1);
+      if (section._isSession) {
+        const i = sessionTableBlocks.findIndex(b => b.__uid === Number(String(section._blockKey).slice("session#".length)));
+        if (i >= 0) sessionTableBlocks.splice(i, 1);
+      } else {
+        removedPresetBlocks.add(section._blockKey);
+      }
       tableBlockSession.delete(section._blockKey);
       renderTablePreset(TABLE_PRESETS[currentTablePresetIndex]);
     });
@@ -7163,28 +7170,34 @@ function renderTablePreset(preset) {
   grid.appendChild(addRow);
 
   const blocks = (preset.tables || []).concat(sessionTableBlocks);
-  if (!blocks.length) {
-    grid.innerHTML = '<div class="empty-note">This table preset has no tables.</div>';
-    return;
-  }
   const presetKey = preset.id || ("preset" + currentTablePresetIndex);
   const presetCount = (preset.tables || []).length;
-  blocks.forEach((block, i) => {
+  const keyFor = (block, i) => i < presetCount
+    ? presetKey + "#" + i
+    : "session#" + (block.__uid != null ? block.__uid : (block.__uid = ++sessionBlockUid));
+  const visible = blocks
+    .map((block, i) => [block, keyFor(block, i)])
+    .filter(([, key]) => !removedPresetBlocks.has(key));
+  if (!visible.length) {
+    const note = document.createElement("div");  // keep the add-table row above the note
+    note.className = "empty-note";
+    note.textContent = "No tables — add one with \u201c+ Add slot table\u201d above, or reload the page to restore the preset defaults.";
+    grid.appendChild(note);
+    return;
+  }
+  for (const [block, key] of visible) {
     const section = document.createElement("section");
     section.className = "table-block";
     grid.appendChild(section);
-    const key = i < presetCount
-      ? presetKey + "#" + i
-      : "session#" + (block.__uid != null ? block.__uid : (block.__uid = ++sessionBlockUid));
     section._blockKey = key;
-    section._isSession = i >= presetCount;
+    section._isSession = key.startsWith("session#");
     // restore this block's session state (panel edits survive preset switches)
     section._block = tableBlockSession.has(key)
       ? normalizeTableBlock(tableBlockSession.get(key))
       : normalizeTableBlock(block);
     tableBlockSession.set(key, section._block);
     renderTableBlock(section, section._block);
-  });
+  }
 }
 
 function renderTablePresetBar() {

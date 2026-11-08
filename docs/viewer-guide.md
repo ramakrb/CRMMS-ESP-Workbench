@@ -191,11 +191,14 @@ Preset-level **value conditions** (set in the Preset Builder) stay active and
 blank out trace/year combinations that do not match. Deterministic
 Max/Min/Most traces are always excluded from condition checks.
 
-### Adding more tables
+### Adding and removing tables
 
 The **+ Add slot table** control above the tables appends another table block
 with the same options (slot picker, rows, statistic, filters, value filter).
-Added tables have a **Remove** button in their header.
+
+Every table has a **Remove** button in its header. Removing an added table
+deletes it; removing a preset table hides it for the session (reload the page
+to restore the saved preset layout).
 
 ### Session memory
 
