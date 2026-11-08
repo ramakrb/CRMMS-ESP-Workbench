@@ -7021,10 +7021,12 @@ function renderTableBlock(section, rawBlock) {
   }
   thead.appendChild(hr);
   table.appendChild(thead);
-  thead.addEventListener("click", e => {
-    const th = e.target.closest("th[data-trace]");
-    if (!th) return;
-    const tn = parseInt(th.dataset.trace, 10);
+  // value-cell click toggles the trace highlight (header clicks are now
+  // column selection — see enableTableCellSelection)
+  table.addEventListener("click", e => {
+    const cell = e.target.closest("td[data-trace]");
+    if (!cell) return;
+    const tn = parseInt(cell.dataset.trace, 10);
     highlightedTrace = highlightedTrace === tn ? null : tn;
     renderTableBlock(section, section._block);
     refreshHighlight();
@@ -7061,6 +7063,7 @@ function renderTableBlock(section, rawBlock) {
       const pairKey = tr.traceNumber + "::" + meta.rowYear;
       const pairBlank = kept && !kept.pairs.has(pairKey);
       const td = document.createElement("td");
+      td.dataset.trace = String(tr.traceNumber);  // click toggles the trace highlight
       const sv = scaled(v);
       td.textContent = (pairBlank || pfBlank(sv)) ? "—" : fmt(sv);
       if (pfOn && !pfBlanking && pfPass(sv)) td.classList.add("page-hl");

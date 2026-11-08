@@ -115,7 +115,7 @@ Leaving the label field empty draws the line with no text: `3510 |`
 
 ## Traces and highlighting
 
-- Click a **trace in any chart**, or a **column header in the data table** —
+- Click a **trace in any chart**, or a **value cell in a data table** —
   the same trace highlights in every chart (others dim), scatter data tables
   filter to that row, and the data table below switches to showing that
   trace's data for **every slot plotted on the page** — including charts you
