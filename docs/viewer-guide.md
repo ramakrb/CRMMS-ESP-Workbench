@@ -195,7 +195,15 @@ Max/Min/Most traces are always excluded from condition checks.
 
 The **+ Add slot table** control above the tables appends another table block
 with the same options (slot picker, rows, statistic, filters, value filter).
-Added tables are session-level — switching presets clears them.
+Added tables have a **Remove** button in their header.
+
+### Session memory
+
+Everything you set in the Filter & aggregate panels — slot, rows, statistic,
+decimals, scaling, and filters — is remembered for the browser session. Switch
+to a plot preset (or another table preset) and come back, and your tables
+return exactly as you left them, including added tables. Reload the page to
+start fresh with the saved preset defaults.
 
 Example: *keep traces whose Powell.Inflow water-year sum is below 9,500,000
 acre-feet* — add a value condition in the Preset Builder with slot

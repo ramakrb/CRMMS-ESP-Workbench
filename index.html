@@ -169,6 +169,8 @@
   .table-block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
   .table-block-head strong { font-size: 14px; color: var(--ink); }
   .table-block-head .table-block-sub { font-size: 11px; color: var(--ink-faint); }
+  .table-block-head .table-remove { margin-left: auto; color: #a8443f; border-color: #e4c6c3; }
+  .table-block-head .table-remove:hover { background: #faf0ef; }
   .add-slot-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
   .add-slot-row select { max-width: 340px; }
   .table-block .dt-scroll { border-radius: 8px; }
@@ -5933,6 +5935,10 @@ let currentPreset = null;
 let currentPresetIndex = 0;
 let currentTablePresetIndex = -1;
 let sessionTableBlocks = [];
+/* per-page-session table state: blockKey -> normalized block (panel edits
+ * survive switching between table pages and plot presets; cleared on reload) */
+const tableBlockSession = new Map();
+let sessionBlockUid = 0;  // stable keys for added tables (removal must not reshuffle state)
 let viewMode = "plots";  // "plots" | "tables"
 let toolbarWired = false;
 
@@ -6499,7 +6505,6 @@ function selectPreset(idx) {
 }
 
 function selectTablePreset(idx) {
-  sessionTableBlocks = [];  // added tables are per-preset-view
   currentTablePresetIndex = idx;
   currentPreset = null;
   viewMode = "tables";
@@ -6775,9 +6780,24 @@ function renderTableBlock(section, rawBlock) {
   section.appendChild(head);
 
   const slotData = model.slots.get(block.slot);
+  const addRemoveBtn = () => {  // session-added tables can be removed (state persists per session)
+    if (!section._isSession) return;
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "mini-button table-remove";
+    rm.textContent = "Remove";
+    rm.addEventListener("click", () => {
+      const i = sessionTableBlocks.findIndex(b => b.__uid === Number(String(section._blockKey).slice("session#".length)));
+      if (i >= 0) sessionTableBlocks.splice(i, 1);
+      tableBlockSession.delete(section._blockKey);
+      renderTablePreset(TABLE_PRESETS[currentTablePresetIndex]);
+    });
+    head.appendChild(rm);
+  };
   if (!slotData) {
     head.innerHTML = "<strong>" + escapeHtml(block.title || block.slot) + "</strong>" +
       '<span class="table-block-sub"><span class="warn-line">Slot not found in the loaded RDF files: <code>' + escapeHtml(block.slot) + "</code></span></span>";
+    addRemoveBtn();
     return;
   }
 
@@ -6875,6 +6895,7 @@ function renderTableBlock(section, rawBlock) {
       else if (f === "pageFilterMode") section._block.pageFilter.mode = el.value;
       else if (f === "decimals" || f === "scale") section._block[f] = Number(el.value);
       else section._block[f] = el.value;
+      if (section._blockKey) tableBlockSession.set(section._blockKey, section._block);  // keep across preset switches
       renderTableBlock(section, section._block);  // panel state preserved via section._filtersOpen
     });
   });
@@ -6904,6 +6925,7 @@ function renderTableBlock(section, rawBlock) {
     (TABLE_ROWS_LABELS[block.rows] || block.rows) + statText + " \u00b7 unit: " + escapeHtml(unit) +
     scaleText +
     " \u00b7 " + traces.length + " traces</span>";
+  addRemoveBtn();
 
   const built = tableRowGroups(slotData, block, traces);
   const scroll = document.createElement("div");
@@ -7136,7 +7158,7 @@ function renderTablePreset(preset) {
   addRow.appendChild(addBtn);
   const addHint = document.createElement("span");
   addHint.className = "hint";
-  addHint.textContent = "Adds a filterable table for any slot (cleared when you switch presets).";
+  addHint.textContent = "Adds a filterable table for any slot (kept, with its settings, for this session).";
   addRow.appendChild(addHint);
   grid.appendChild(addRow);
 
@@ -7145,13 +7167,24 @@ function renderTablePreset(preset) {
     grid.innerHTML = '<div class="empty-note">This table preset has no tables.</div>';
     return;
   }
-  for (const block of blocks) {
+  const presetKey = preset.id || ("preset" + currentTablePresetIndex);
+  const presetCount = (preset.tables || []).length;
+  blocks.forEach((block, i) => {
     const section = document.createElement("section");
     section.className = "table-block";
     grid.appendChild(section);
-    section._block = normalizeTableBlock(block);
+    const key = i < presetCount
+      ? presetKey + "#" + i
+      : "session#" + (block.__uid != null ? block.__uid : (block.__uid = ++sessionBlockUid));
+    section._blockKey = key;
+    section._isSession = i >= presetCount;
+    // restore this block's session state (panel edits survive preset switches)
+    section._block = tableBlockSession.has(key)
+      ? normalizeTableBlock(tableBlockSession.get(key))
+      : normalizeTableBlock(block);
+    tableBlockSession.set(key, section._block);
     renderTableBlock(section, section._block);
-  }
+  });
 }
 
 function renderTablePresetBar() {
