@@ -591,7 +591,7 @@
         <label class="inline"><input type="checkbox" id="dtOnlyVisible"> Only visible traces</label>
       </span>
       <span id="dtInfo"></span>
-      <span id="dtHint">Click a trace column to highlight it in every chart; click a period row to highlight the row; click again to clear.</span>
+      <span id="dtHint">Click a value cell to highlight that trace in every chart; click or drag column headers and period rows to select columns and rows; Esc clears.</span>
     </div>
     <div id="dtTables"></div>
   </section>
@@ -7726,26 +7726,24 @@ function enableTableCellSelection(table) {
     };
     if (!td && !th) return;
 
-    /* ---- column header: ctrl+click / ctrl+drag selects whole columns ---- */
+    /* ---- column header: click / drag selects whole columns (ctrl adds/toggles) ---- */
     if (th) {
-      if (th.classList.contains("period") || !ctrl) return;  // plain click = existing behavior
+      if (th.classList.contains("period")) return;
       e.preventDefault();
       const anchorCol = th.cellIndex;
       let rect = colRect(anchorCol);
       let moved = false;
-      let toggledOff = false;
       // ctrl+click on an already-selected column toggles it off (unless dragging)
       const prevRegions = baseRegions();
-      const existing = prevRegions.find(r => sameRect(r, rect));
+      const existing = ctrl ? prevRegions.find(r => sameRect(r, rect)) : null;
       const onMove = ev => {
         const h = ev.target.closest("th");
         if (!h || !table.contains(h) || h.classList.contains("period")) return;
         const col = h.cellIndex;
         if (col === anchorCol && !moved) return;
         moved = true;
-        toggledOff = false;
         rect = { r0: 0, c0: Math.min(anchorCol, col), r1: lastRow, c1: Math.max(anchorCol, col) };
-        fire("replace", rect);
+        fire(ctrl ? "add" : "replace", rect);
       };
       const onUp = () => {
         document.removeEventListener("mousemove", onMove, true);
@@ -7757,10 +7755,10 @@ function enableTableCellSelection(table) {
             paintCellSelection();
             if (cellSelection.regions.length) showCellStats(); else clearCellSelection();
           } else {
-            fire("add", rect);
+            fire(ctrl ? "add" : "replace", rect);
           }
         }
-        suppressNextClick();  // keep the plain-click trace toggle out of column selection
+        suppressNextClick();  // header clicks select columns — leave trace toggling to value cells
       };
       document.addEventListener("mousemove", onMove, true);
       document.addEventListener("mouseup", onUp, true);

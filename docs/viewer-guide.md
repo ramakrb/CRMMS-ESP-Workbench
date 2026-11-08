@@ -133,7 +133,8 @@ Below the charts: period rows × trace columns for the selected slot
 
 - **Only visible traces** (checked by default) hides Max/Min/Most and any
   traces you unchecked in the Traces menu.
-- Click a column to highlight that trace everywhere.
+- Click a value cell to highlight that trace everywhere (column headers now
+  select columns — see *Selecting cells* below).
 - Values respect each slot's units and scale.
 
 ### Selecting cells (Excel-style)
@@ -144,9 +145,8 @@ tables, and Slot Analysis tables — you can select cells like in Excel:
 - **Drag across value cells** to select a rectangle.
 - **Click or drag on a period (row header) cell** to select whole rows —
   contiguous rows by dragging.
-- **Ctrl+click or Ctrl+drag on a column header** to select whole columns;
-  Ctrl+click again on a selected column to toggle it off. Plain header clicks
-  keep their usual behavior (trace highlight).
+- **Click or drag on a column header** to select whole columns — contiguous
+  columns by dragging; Ctrl+click on a selected column toggles it off.
 - **Ctrl+click / Ctrl+drag** adds extra regions, so selections can mix
   distinct rows, columns and rectangles.
 
