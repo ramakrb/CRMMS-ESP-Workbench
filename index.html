@@ -406,14 +406,16 @@
   }
   #dtInfo { font-size: 11.5px; color: var(--ink-faint); }
   .dt-scroll { overflow: auto; max-height: 480px; border: 1px solid var(--line); border-radius: 6px; }
-  #dataTable, .scatter-points-table { border-collapse: separate; border-spacing: 0; font-size: 11px; }
-  #dataTable th, #dataTable td, .scatter-points-table th, .scatter-points-table td {
+  /* shared cell gridlines for every data table (main data table, highlight
+   * view groups, scatter data tables, Slot Analysis blocks) */
+  .data-table, .scatter-points-table { border-collapse: separate; border-spacing: 0; font-size: 11px; }
+  .data-table th, .data-table td, .scatter-points-table th, .scatter-points-table td {
     padding: 3px 9px;
     border-bottom: 1px solid #e7edf0;   /* subtle row line */
     border-right: 1px solid #eef2f4;    /* subtle column separator */
     white-space: nowrap;
   }
-  #dataTable thead th, .scatter-points-table thead th { border-bottom: 1px solid #dce4e8; }
+  .data-table thead th, .scatter-points-table thead th { border-bottom: 1px solid #dce4e8; }
   .data-table thead th, .scatter-points-table thead th {
     position: sticky; top: 0; z-index: 2;
     background: #eef3f4; font-weight: 600; color: var(--ink-soft);
