@@ -37,15 +37,19 @@ Two bars sit above the charts:
 
 ## Reservoir Data
 
-The **Reservoir Data** button in the Tables bar shows a card for each known
+The **Reservoir Data** button in the Tables bar shows one compact card per
 reservoir — Powell, Mead, Fontenelle, Flaming Gorge, BlueMesa, MorrowPoint,
-Crystal, Navajo, TaylorPark, Vallecito, Mohave and Havasu — with a checkbox
-for each of the six core slots (Pool Elevation, Inflow, Outflow, Energy,
-Storage, Spill) the loaded files contain. Reservoirs with **none** of these
-slots get no card.
+Crystal, Navajo, TaylorPark, Vallecito, Mohave and Havasu — showing just the
+name and how many of the six core slots (Pool Elevation, Inflow, Outflow,
+Energy, Storage, Spill) the loaded files contain. Reservoirs with **none**
+of these slots get no card.
 
+- **Click a card** to expand it and reveal the slot checkboxes (one card
+  open at a time).
 - **Tick a slot** to show its table below the cards; untick to hide it.
-- **Click a reservoir name** to toggle all of its slots at once.
+  Checked slots keep showing even after the card is collapsed.
+- **show all / hide all** inside an open card toggles every slot of that
+  reservoir at once.
 - Each table is a full Slot Analysis table (Filter & aggregate, scaling,
   value filters, cell selection and stats all work), and your panel settings
   for each reservoir slot are remembered for the session.
@@ -53,11 +57,11 @@ slots get no card.
 ## Reservoir Charts
 
 The **Reservoir Charts** button in the Plots bar works the same way for
-charts: tick slots on the cards to show their plots below (line charts of
-the raw ensemble), or click a reservoir name to toggle all of its slots.
-The charts are ordinary plot cards — Plot settings, trace highlighting,
-the toolbar and Build report all work as in the other presets, and each
-slot's chart settings are remembered even as you check slots on and off.
+charts: click a card to reveal its slot checkboxes, tick slots to show their
+plots below (line charts of the raw ensemble). The charts are ordinary plot
+cards — Plot settings, trace highlighting, the toolbar and Build report all
+work as in the other presets, and each slot's chart settings are remembered
+even as you check slots on and off.
 
 ---
 

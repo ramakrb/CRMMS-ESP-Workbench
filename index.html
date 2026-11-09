@@ -165,8 +165,11 @@
     box-shadow: var(--shadow-sm); padding: 14px 16px;
     font-family: inherit; text-align: left;
   }
-  .res-card-name { font-size: 15px; font-weight: 800; color: var(--ink); cursor: pointer; }
+  .res-card-name { font-size: 15px; font-weight: 800; color: var(--ink); cursor: pointer; display: flex; align-items: baseline; gap: 6px; }
   .res-card-name:hover { color: var(--accent, #177c80); }
+  .res-card-name .res-chevron { color: var(--ink-faint); font-size: 12px; }
+  .res-card-name .res-card-count { margin-left: auto; font-weight: 400; }
+  .res-card-open { border-color: var(--accent, #177c80); background: #f4fafb; }
   .res-check {
     display: flex; align-items: center; gap: 7px;
     font-size: 12px; color: var(--ink-soft); cursor: pointer; user-select: none;
@@ -7362,8 +7365,8 @@ function renderResCardsPanel(kind) {
   hint.className = "hint";
   hint.style.cssText = "margin-bottom:12px;";
   hint.textContent = kind === "data"
-    ? "Tick slots to show their tables below; click a reservoir name to toggle all of its slots."
-    : "Tick slots to show their charts below; click a reservoir name to toggle all of its slots.";
+    ? "Click a reservoir to pick its slots; tick slots to show their tables below."
+    : "Click a reservoir to pick its slots; tick slots to show their charts below.";
   panel.appendChild(hint);
   const grid = document.createElement("div");
   grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:16px;";
@@ -7371,24 +7374,49 @@ function renderResCardsPanel(kind) {
   for (const name of RESERVOIR_NAMES) {
     const slots = reservoirSlots(name);
     if (!slots.length) continue;
+    const expanded = resExpandedName === name;
     const card = document.createElement("div");
-    card.className = "res-card";
+    card.className = "res-card" + (expanded ? " res-card-open" : "");
     const nameEl = document.createElement("div");
     nameEl.className = "res-card-name";
-    nameEl.textContent = name;
-    nameEl.title = "Click to show/hide all slots of this reservoir";
-    nameEl.addEventListener("click", () => toggleReservoirAll(kind, name));
+    const chevron = document.createElement("span");
+    chevron.className = "res-chevron";
+    chevron.textContent = expanded ? "\u25be " : "\u25b8 ";
+    nameEl.appendChild(chevron);
+    nameEl.appendChild(document.createTextNode(name));
+    const count = document.createElement("span");
+    count.className = "res-card-count";
+    count.textContent = slots.length + " slots";
+    nameEl.appendChild(count);
+    nameEl.title = expanded ? "Click to collapse" : "Click to pick slots";
+    nameEl.addEventListener("click", () => {
+      resExpandedName = expanded ? null : name;  // one card open at a time
+      renderResCardsPanel(kind);
+    });
     card.appendChild(nameEl);
-    for (const s of slots) {
-      const label = document.createElement("label");
-      label.className = "res-check";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName);
-      cb.addEventListener("change", () => onResCheck(kind, s.slotName, cb.checked));
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(s.sfx));
-      card.appendChild(label);
+    if (expanded) {
+      const allRow = document.createElement("div");
+      allRow.className = "res-check";
+      const allLink = document.createElement("a");
+      allLink.href = "#";
+      allLink.textContent = resAllChecked(kind, name) ? "hide all" : "show all";
+      allLink.addEventListener("click", ev => {
+        ev.preventDefault();
+        toggleReservoirAll(kind, name);
+      });
+      allRow.appendChild(allLink);
+      card.appendChild(allRow);
+      for (const s of slots) {
+        const label = document.createElement("label");
+        label.className = "res-check";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName);
+        cb.addEventListener("change", () => onResCheck(kind, s.slotName, cb.checked));
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(s.sfx));
+        card.appendChild(label);
+      }
     }
     grid.appendChild(card);
   }
@@ -7403,6 +7431,8 @@ function resAllChecked(kind, name) {
   const slots = reservoirSlots(name);
   return slots.length > 0 && slots.every(s => kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName));
 }
+
+let resExpandedName = null;  // the reservoir whose slot picker is open (accordion)
 
 function toggleReservoirAll(kind, name) {
   const makeChecked = !resAllChecked(kind, name);
