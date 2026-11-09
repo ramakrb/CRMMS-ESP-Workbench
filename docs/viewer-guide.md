@@ -53,6 +53,11 @@ contain. Reservoirs with **none** of the configured slots get no card.
 - Data tables are full Slot Analysis tables; charts are ordinary plot cards —
   both with all the usual features, remembered per slot.
 
+> **Configuring these pages** — adding/removing slots, reservoirs, or whole
+> pages — is done in the `RESERVOIR_PAGES` block near the top of `index.html`.
+> See [`docs/reservoir-pages-guide.md`](reservoir-pages-guide.md) for the
+> step-by-step guide.
+
 ### Configuring the pages
 
 Both pages (and any new ones you want) are defined in the `RESERVOIR_PAGES`

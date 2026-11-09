@@ -31,6 +31,15 @@ custom table presets without hand-editing JSON:
 The published viewer page stays view-only for end users. Detailed builder documentation lives in `docs/preset-builder-guide.md`
 (local-only, not published).
 
+### Reservoir pages (configurable)
+
+`index.html` also hosts configurable **reservoir card pages** — Reservoir
+Data (per-reservoir slot tables) and Reservoir Charts (per-reservoir slot
+charts). They are generated from the `RESERVOIR_PAGES` block near the top of
+`index.html`: edit it to add/remove slots, reservoirs, or whole pages.
+See `docs/reservoir-pages-guide.md` for a step-by-step guide, and
+`docs/viewer-guide.md` for the end-user view.
+
 ---
 
 ---
