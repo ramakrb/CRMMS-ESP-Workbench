@@ -4548,6 +4548,46 @@ const PAGE_TITLE = "CRMMS ESP Preset Plots";
  * rendered markdown on GitHub (or any URL). Empty string hides the link. */
 const DOCS_URL = "https://github.com/ramakrb/CRMMS-ESP-Workbench/blob/main/docs/viewer-guide.md";
 
+/* =========================================================================
+ * Reservoir card pages — EDIT THIS to add/remove reservoirs or slots, or to
+ * add whole new pages. Each entry becomes one button:
+ *
+ *   id          unique key (also stores the page's per-slot settings)
+ *   name        button + page title
+ *   kind        "data"   → slot tables,   button in the Tables bar
+ *               "charts" → slot charts,   button in the Plots bar
+ *   reservoirs  reservoir names as shown on the cards. The slot lookup also
+ *               tries the name without spaces ("Flaming Gorge" →
+ *               "FlamingGorge.Pool Elevation"), so use the readable name.
+ *   slots       slot suffixes to offer on the cards, in display order.
+ *
+ * A reservoir only appears if the loaded RDF files contain at least one of
+ * the listed slots. Remove entries (or set RESERVOIR_PAGES = [] ) to hide
+ * the feature entirely.
+ * ========================================================================= */
+const RESERVOIR_PAGES = [
+  {
+    id: "reservoir-data",
+    name: "Reservoir Data",
+    kind: "data",
+    reservoirs: [
+      "Powell", "Mead", "Fontenelle", "Flaming Gorge", "BlueMesa", "MorrowPoint",
+      "Crystal", "Navajo", "TaylorPark", "Vallecito", "Mohave", "Havasu",
+    ],
+    slots: ["Pool Elevation", "Inflow", "Outflow", "Energy", "Storage", "Spill"],
+  },
+  {
+    id: "reservoir-charts",
+    name: "Reservoir Charts",
+    kind: "charts",
+    reservoirs: [
+      "Powell", "Mead", "Fontenelle", "Flaming Gorge", "BlueMesa", "MorrowPoint",
+      "Crystal", "Navajo", "TaylorPark", "Vallecito", "Mohave", "Havasu",
+    ],
+    slots: ["Pool Elevation", "Inflow", "Outflow", "Energy", "Storage", "Spill"],
+  },
+];
+
 /* Optional: which preset to show first (id from explorer_presets.json).
  * Empty string = the first preset below. */
 const DEFAULT_PRESET = "";
@@ -6530,12 +6570,15 @@ function renderPresetBar() {
       bar.appendChild(desc);
     }
   });
-  const resBtn = document.createElement("button");
-  resBtn.textContent = "Reservoir Charts";
-  resBtn.id = "resChartsBtn";
-  resBtn.title = "Per-reservoir charts: Pool Elevation, Inflow, Outflow, Energy, Storage, Spill";
-  resBtn.addEventListener("click", () => selectReservoirCharts());
-  bar.appendChild(resBtn);
+  const chartPages = RESERVOIR_PAGES.filter(pg => pg.kind === "charts");
+  for (const pg of chartPages) {
+    const resBtn = document.createElement("button");
+    resBtn.textContent = pg.name;
+    resBtn.dataset.resPage = pg.id;
+    resBtn.title = "Per-reservoir charts: " + pg.slots.join(", ");
+    resBtn.addEventListener("click", () => selectReservoirPage(pg));
+    bar.appendChild(resBtn);
+  }
 }
 
 function selectPreset(idx) {
@@ -6838,18 +6881,18 @@ function renderTableBlock(section, rawBlock) {
     rm.type = "button";
     rm.className = "mini-button table-remove";
     rm.textContent = "Remove";
-    rm.title = viewMode === "reservoirs"
+    rm.title = resCurrentPage
       ? "Hide this slot's table (unticks it on the reservoir card)"
       : section._isSession
         ? "Remove this added table (this session)"
         : "Hide this table for this session — reload the page to restore it";
     rm.addEventListener("click", () => {
-      if (viewMode === "reservoirs") {
+      if (resCurrentPage) {
         // reservoir page: Remove = untick this slot; the other tables stay
         const slotName = String(section._blockKey).slice("reservoir:".length);
-        resDataChecked.delete(slotName);
-        renderResCardsPanel("data");
-        renderReservoirTables();
+        resCheckedSet(resCurrentPage).delete(slotName);
+        renderResCardsPanel(resCurrentPage);
+        renderReservoirTables(resCurrentPage);
         return;
       }
       if (section._isSession) {
@@ -7258,8 +7301,9 @@ function renderTablePreset(preset) {
 
 function renderTablePresetBar() {
   const bar = document.getElementById("tablePresetBar");
-  const reservoirsAvailable = !model || RESERVOIR_NAMES.some(name => reservoirSlots(name).length);
-  if (!TABLE_PRESETS.length && !reservoirsAvailable) { bar.style.display = "none"; return; }
+  const dataPages = RESERVOIR_PAGES.filter(pg => pg.kind === "data" &&
+    (!model || pg.reservoirs.some(name => reservoirSlots(pg, name).length)));
+  if (!TABLE_PRESETS.length && !dataPages.length) { bar.style.display = "none"; return; }
   bar.style.display = "flex";
   bar.innerHTML = '<span class="bar-label">Tables</span>';
   TABLE_PRESETS.forEach((preset, idx) => {
@@ -7269,30 +7313,27 @@ function renderTablePresetBar() {
     btn.addEventListener("click", () => selectTablePreset(idx));
     bar.appendChild(btn);
   });
-  if (reservoirsAvailable) {
+  for (const pg of dataPages) {
     const btn = document.createElement("button");
-    btn.textContent = "Reservoir Data";
-    btn.id = "resDataBtn";
-    btn.title = "Per-reservoir tables: Pool Elevation, Inflow, Outflow, Energy, Storage, Spill";
-    btn.addEventListener("click", () => selectReservoirView());
+    btn.textContent = pg.name;
+    btn.dataset.resPage = pg.id;
+    btn.title = "Per-reservoir tables: " + pg.slots.join(", ");
+    btn.addEventListener("click", () => selectReservoirPage(pg));
     bar.appendChild(btn);
   }
 }
 
 /* ---- Reservoir Data view: one card per reservoir, tables per slot ---- */
 
-const RESERVOIR_NAMES = [
-  "Powell", "Mead", "Fontenelle", "Flaming Gorge", "BlueMesa", "MorrowPoint",
-  "Crystal", "Navajo", "TaylorPark", "Vallecito", "Mohave", "Havasu",
-];
-const RESERVOIR_SLOT_SUFFIXES = ["Pool Elevation", "Inflow", "Outflow", "Energy", "Storage", "Spill"];
+/* ---- Reservoir card pages engine (driven by the RESERVOIR_PAGES config).
+ * "data" pages render slot tables below the cards; "charts" pages render
+ * slot charts. Checked slots, expanded card and chart settings are stored
+ * per page id, so every page is independent. ---- */
 
-/* slots of a reservoir — matches the display name and the no-space object
- * prefix (e.g. "Flaming Gorge" card → "FlamingGorge.Pool Elevation") */
-function reservoirSlots(name) {
-  const prefixes = [name, name.replace(/\s+/g, "")].filter((v, i, a) => a.indexOf(v) === i);
+function reservoirSlots(page, name) {
+  const prefixes = [name, String(name).replace(/\s+/g, "")].filter((v, i, a) => a.indexOf(v) === i);
   const found = [];
-  for (const sfx of RESERVOIR_SLOT_SUFFIXES) {
+  for (const sfx of page.slots) {
     for (const p of prefixes) {
       const slotName = p + "." + sfx;
       if (model && model.slots.has(slotName)) { found.push({ sfx: sfx, slotName: slotName }); break; }
@@ -7301,53 +7342,47 @@ function reservoirSlots(name) {
   return found;
 }
 
-/* ---- Reservoir pages: cards with per-slot show/hide checkboxes; the
- * checked slots' tables (Reservoir Data) or charts (Reservoir Charts)
- * render below the cards. ---- */
-
 let _resCardsPanel = null;
-const resDataChecked = new Set();   // slot names with a visible data table
-const resChartsChecked = new Set(); // slot names with a visible chart
-let _resChartsPreset = null;
+const resPageChecked = new Map();   // pageId -> Set(slotName) with visible tables/charts
+const resExpandedNames = new Map(); // pageId -> reservoir name whose picker is open
+const resChartsPresets = new Map(); // pageId -> synthetic preset for "charts" pages
+let resCurrentPage = null;          // page being viewed
 
-/* A synthetic preset covering every available reservoir slot. Visibility is
- * driven by presetItems()' removed-list (synced from resChartsChecked), so
- * each slot keeps a stable id and its chart settings survive check/uncheck. */
-function getResChartsPreset() {
-  if (!_resChartsPreset) {
+function resCheckedSet(page) {
+  if (!resPageChecked.has(page.id)) resPageChecked.set(page.id, new Set());
+  return resPageChecked.get(page.id);
+}
+
+/* A synthetic preset covering every available slot of a charts page.
+ * Visibility is driven by presetItems()' removed-list (synced from the
+ * checked set), so each slot keeps a stable id and its chart settings
+ * survive check/uncheck. */
+function getResChartsPreset(page) {
+  if (!resChartsPresets.has(page.id)) {
     const plots = [];
-    for (const name of RESERVOIR_NAMES) {
-      for (const s of reservoirSlots(name)) {
+    for (const name of page.reservoirs) {
+      for (const s of reservoirSlots(page, name)) {
         plots.push({ slot: s.slotName, plot_type: "line", transform: "raw" });
       }
     }
-    _resChartsPreset = {
-      id: "reservoir-charts",
-      name: "Reservoir Charts",
+    resChartsPresets.set(page.id, {
+      id: page.id,
+      name: page.name,
       description: "",
       layout: { columns: 2, plot_height: 400 },
       plots: plots,
-    };
+    });
   }
-  return _resChartsPreset;
+  return resChartsPresets.get(page.id);
 }
 
-function resChartChecked(slotName) {
-  return resChartsChecked.has(slotName);
-}
-
-function setResChartChecked(slotName, checked) {
-  if (checked) resChartsChecked.add(slotName); else resChartsChecked.delete(slotName);
-  syncResChartsRemoved();
-  saveUiState();
-}
-
-function syncResChartsRemoved() {
-  const preset = getResChartsPreset();
+function syncResChartsRemoved(page) {
+  const preset = getResChartsPreset(page);
   const ui = presetUi(preset);
+  const checked = resCheckedSet(page);
   ui.removed = preset.plots
-    .map((p, i) => ({ id: "reservoir-charts:p" + i, slot: p.slot }))
-    .filter(x => !resChartsChecked.has(x.slot))
+    .map((p, i) => ({ id: page.id + ":p" + i, slot: p.slot }))
+    .filter(x => !checked.has(x.slot))
     .map(x => x.id);
 }
 
@@ -7367,24 +7402,26 @@ function hideResCardsPanel() {
   if (p) p.style.display = "none";
 }
 
-function renderResCardsPanel(kind) {
+function renderResCardsPanel(page) {
   const panel = resCardsPanel();
   panel.innerHTML = "";
   panel.style.display = "block";
   const hint = document.createElement("div");
   hint.className = "hint";
   hint.style.cssText = "margin-bottom:12px;";
-  hint.textContent = kind === "data"
+  hint.textContent = page.kind === "data"
     ? "Click a reservoir to pick its slots; tick slots to show their tables below."
     : "Click a reservoir to pick its slots; tick slots to show their charts below.";
   panel.appendChild(hint);
   const grid = document.createElement("div");
   grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:16px;";
   panel.appendChild(grid);
-  for (const name of RESERVOIR_NAMES) {
-    const slots = reservoirSlots(name);
+  const expandedName = resExpandedNames.get(page.id) || null;
+  const checked = resCheckedSet(page);
+  for (const name of page.reservoirs) {
+    const slots = reservoirSlots(page, name);
     if (!slots.length) continue;
-    const expanded = resExpandedName === name;
+    const expanded = expandedName === name;
     const card = document.createElement("div");
     card.className = "res-card" + (expanded ? " res-card-open" : "");
     const nameEl = document.createElement("div");
@@ -7400,8 +7437,8 @@ function renderResCardsPanel(kind) {
     nameEl.appendChild(count);
     nameEl.title = expanded ? "Click to collapse" : "Click to pick slots";
     nameEl.addEventListener("click", () => {
-      resExpandedName = expanded ? null : name;  // one card open at a time
-      renderResCardsPanel(kind);
+      resExpandedNames.set(page.id, expanded ? null : name);  // one card open at a time
+      renderResCardsPanel(page);
     });
     card.appendChild(nameEl);
     if (expanded) {
@@ -7409,10 +7446,10 @@ function renderResCardsPanel(kind) {
       allRow.className = "res-check";
       const allLink = document.createElement("a");
       allLink.href = "#";
-      allLink.textContent = resAllChecked(kind, name) ? "hide all" : "show all";
+      allLink.textContent = resAllChecked(page, name) ? "hide all" : "show all";
       allLink.addEventListener("click", ev => {
         ev.preventDefault();
-        toggleReservoirAll(kind, name);
+        toggleReservoirAll(page, name);
       });
       allRow.appendChild(allLink);
       card.appendChild(allRow);
@@ -7421,8 +7458,8 @@ function renderResCardsPanel(kind) {
         label.className = "res-check";
         const cb = document.createElement("input");
         cb.type = "checkbox";
-        cb.checked = kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName);
-        cb.addEventListener("change", () => onResCheck(kind, s.slotName, cb.checked));
+        cb.checked = checked.has(s.slotName);
+        cb.addEventListener("change", () => onResCheck(page, s.slotName, cb.checked));
         label.appendChild(cb);
         label.appendChild(document.createTextNode(s.sfx));
         card.appendChild(label);
@@ -7432,63 +7469,60 @@ function renderResCardsPanel(kind) {
   }
 }
 
-function resAnyChecked(kind, name) {
-  const slots = reservoirSlots(name);
-  return slots.some(s => kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName));
+function resAllChecked(page, name) {
+  const slots = reservoirSlots(page, name);
+  const checked = resCheckedSet(page);
+  return slots.length > 0 && slots.every(s => checked.has(s.slotName));
 }
 
-function resAllChecked(kind, name) {
-  const slots = reservoirSlots(name);
-  return slots.length > 0 && slots.every(s => kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName));
-}
-
-let resExpandedName = null;  // the reservoir whose slot picker is open (accordion)
-
-function toggleReservoirAll(kind, name) {
-  const makeChecked = !resAllChecked(kind, name);
-  for (const s of reservoirSlots(name)) {
-    if (kind === "data") {
-      if (makeChecked) resDataChecked.add(s.slotName); else resDataChecked.delete(s.slotName);
-    } else {
-      setResChartChecked(s.slotName, makeChecked);
-    }
+function toggleReservoirAll(page, name) {
+  const makeChecked = !resAllChecked(page, name);
+  const checked = resCheckedSet(page);
+  for (const s of reservoirSlots(page, name)) {
+    if (makeChecked) checked.add(s.slotName); else checked.delete(s.slotName);
   }
-  renderResCardsPanel(kind);
-  if (kind === "data") renderReservoirTables(); else renderReservoirChartsContent();
+  if (page.kind === "charts") { syncResChartsRemoved(page); saveUiState(); }
+  renderResCardsPanel(page);
+  if (page.kind === "data") renderReservoirTables(page); else renderReservoirChartsContent(page);
 }
 
-function onResCheck(kind, slotName, checked) {
-  if (kind === "data") {
-    if (checked) resDataChecked.add(slotName); else resDataChecked.delete(slotName);
-    renderReservoirTables();
+function onResCheck(page, slotName, checked_) {
+  const checked = resCheckedSet(page);
+  if (checked_) checked.add(slotName); else checked.delete(slotName);
+  if (page.kind === "charts") { syncResChartsRemoved(page); saveUiState(); }
+  if (page.kind === "data") renderReservoirTables(page); else renderReservoirChartsContent(page);
+}
+
+function selectReservoirPage(page) {
+  resCurrentPage = page;
+  if (page.kind === "data") {
+    currentPreset = null;
+    viewMode = "reservoirs";
   } else {
-    setResChartChecked(slotName, checked);
-    renderReservoirChartsContent();
+    currentPreset = getResChartsPreset(page);
+    viewMode = "reservoirCharts";
   }
-}
-
-function selectReservoirView() {
-  currentPreset = null;
-  viewMode = "reservoirs";
-  document.querySelectorAll("#presetBar button").forEach(b => b.classList.remove("active"));
-  const tableBar = document.getElementById("tablePresetBar");
-  tableBar.querySelectorAll("button").forEach(b => {
-    b.classList.toggle("active", b.id === "resDataBtn");
+  document.querySelectorAll("#presetBar button").forEach(b => {
+    b.classList.toggle("active", page.kind === "charts" && b.dataset.resPage === page.id);
+  });
+  document.querySelectorAll("#tablePresetBar button").forEach(b => {
+    b.classList.toggle("active", page.kind === "data" && b.dataset.resPage === page.id);
   });
   updateDataTableSectionVisibility();
-  renderResCardsPanel("data");
-  renderReservoirTables();
+  renderResCardsPanel(page);
+  if (page.kind === "data") renderReservoirTables(page); else renderReservoirChartsContent(page);
 }
 
-function renderReservoirTables() {
+function renderReservoirTables(page) {
   const grid = document.getElementById("plotGrid");
   clearCellSelection();
   grid.innerHTML = "";
   grid.style.gridTemplateColumns = "minmax(0, 1fr)";
+  const checked = resCheckedSet(page);
   const blocks = [];
-  for (const name of RESERVOIR_NAMES) {
-    for (const s of reservoirSlots(name)) {
-      if (resDataChecked.has(s.slotName)) blocks.push(s);
+  for (const name of page.reservoirs) {
+    for (const s of reservoirSlots(page, name)) {
+      if (checked.has(s.slotName)) blocks.push(s);
     }
   }
   if (!blocks.length) {
@@ -7511,26 +7545,14 @@ function renderReservoirTables() {
   }
 }
 
-function selectReservoirCharts() {
-  viewMode = "reservoirCharts";
-  currentPreset = getResChartsPreset();
-  const bar = document.getElementById("presetBar");
-  bar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.id === "resChartsBtn"));
-  const tableBar = document.getElementById("tablePresetBar");
-  tableBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
-  updateDataTableSectionVisibility();
-  renderResCardsPanel("charts");
-  renderReservoirChartsContent();
-}
-
-function renderReservoirChartsContent() {
+function renderReservoirChartsContent(page) {
   const grid = document.getElementById("plotGrid");
-  if (!resChartsChecked.size) {
+  if (!resCheckedSet(page).size) {
     grid.innerHTML = '<div class="empty-note">Tick slots on the cards above to show their charts.</div>';
     return;
   }
-  syncResChartsRemoved();
-  renderPreset(getResChartsPreset());
+  syncResChartsRemoved(page);
+  renderPreset(getResChartsPreset(page));
 }
 
 /* ---- toolbar (trace visibility, layout, add plot, reset) ---- */
@@ -7660,11 +7682,12 @@ function setupToolbar() {
   document.getElementById("resetPresetBtn").addEventListener("click", () => {
     if (!currentPreset) return;
     delete uiState.presets[currentPreset.id || currentPreset.name || "preset"];
-    if (currentPreset === getResChartsPreset()) {
-      // reset = show every reservoir chart; keep the checkboxes in sync
-      for (const p of currentPreset.plots) resChartsChecked.add(p.slot);
-      syncResChartsRemoved();
-      renderResCardsPanel("charts");
+    const chartsPage = RESERVOIR_PAGES.find(pg => pg.kind === "charts" && currentPreset === getResChartsPreset(pg));
+    if (chartsPage) {
+      // reset = show every chart on this page; keep the checkboxes in sync
+      for (const p of currentPreset.plots) resCheckedSet(chartsPage).add(p.slot);
+      syncResChartsRemoved(chartsPage);
+      renderResCardsPanel(chartsPage);
     }
     saveUiState();
     renderPreset(currentPreset);

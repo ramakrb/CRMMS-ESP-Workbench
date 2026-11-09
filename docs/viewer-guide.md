@@ -35,33 +35,50 @@ Two bars sit above the charts:
 
 ---
 
-## Reservoir Data
+## Reservoir Data & Reservoir Charts (configurable)
 
-The **Reservoir Data** button in the Tables bar shows one compact card per
-reservoir — Powell, Mead, Fontenelle, Flaming Gorge, BlueMesa, MorrowPoint,
-Crystal, Navajo, TaylorPark, Vallecito, Mohave and Havasu — showing just the
-name and how many of the six core slots (Pool Elevation, Inflow, Outflow,
-Energy, Storage, Spill) the loaded files contain. Reservoirs with **none**
-of these slots get no card.
+Two card pages ship by default: **Reservoir Data** (Tables bar — slot
+*tables*) and **Reservoir Charts** (Plots bar — slot *charts*). Both show one
+compact card per reservoir (Powell, Mead, Fontenelle, Flaming Gorge,
+BlueMesa, MorrowPoint, Crystal, Navajo, TaylorPark, Vallecito, Mohave,
+Havasu) with a count of how many of the configured slots the loaded files
+contain. Reservoirs with **none** of the configured slots get no card.
 
 - **Click a card** to expand it and reveal the slot checkboxes (one card
   open at a time).
-- **Tick a slot** to show its table below the cards; untick to hide it.
-  Checked slots keep showing even after the card is collapsed.
+- **Tick a slot** to show its table/chart below the cards; untick to hide
+  it. Checked slots keep showing even after the card is collapsed.
 - **show all / hide all** inside an open card toggles every slot of that
   reservoir at once.
-- Each table is a full Slot Analysis table (Filter & aggregate, scaling,
-  value filters, cell selection and stats all work), and your panel settings
-  for each reservoir slot are remembered for the session.
+- Data tables are full Slot Analysis tables; charts are ordinary plot cards —
+  both with all the usual features, remembered per slot.
 
-## Reservoir Charts
+### Configuring the pages
 
-The **Reservoir Charts** button in the Plots bar works the same way for
-charts: click a card to reveal its slot checkboxes, tick slots to show their
-plots below (line charts of the raw ensemble). The charts are ordinary plot
-cards — Plot settings, trace highlighting, the toolbar and Build report all
-work as in the other presets, and each slot's chart settings are remembered
-even as you check slots on and off.
+Both pages (and any new ones you want) are defined in the `RESERVOIR_PAGES`
+block near the top of `index.html`, next to `RDF_FILES`:
+
+```js
+const RESERVOIR_PAGES = [
+  {
+    id: "reservoir-data",            // unique key
+    name: "Reservoir Data",          // button + page title
+    kind: "data",                    // "data" = tables, "charts" = charts
+    reservoirs: ["Powell", "Mead", ...],
+    slots: ["Pool Elevation", "Inflow", ...],
+  },
+  { id: "reservoir-charts", name: "Reservoir Charts", kind: "charts",
+    reservoirs: [...], slots: [...] },
+];
+```
+
+- Add or remove **slots** in `slots` (use the RiverWare slot suffix, e.g.
+  `"Evaporation"`), or reservoirs in `reservoirs` — the slot lookup also
+  matches the name without spaces (`"Flaming Gorge"` → `FlamingGorge.…`).
+- Add a whole new page by adding another entry (unique `id`, `kind` of
+  `"data"` or `"charts"`) — it appears as its own button in the Tables or
+  Plots bar with its own independent card state.
+- Set `RESERVOIR_PAGES = []` to hide the feature entirely.
 
 ---
 
