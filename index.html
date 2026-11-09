@@ -158,16 +158,20 @@
   #tablePresetBar button.active { background: var(--navy, #0b3144); border-color: var(--navy, #0b3144); color: #fff; }
 
   /* custom table blocks */
-  /* Reservoir Data cards */
+  /* Reservoir Data / Reservoir Charts cards */
   .res-card {
     display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
     background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-    box-shadow: var(--shadow-sm); padding: 14px 16px; cursor: pointer;
+    box-shadow: var(--shadow-sm); padding: 14px 16px;
     font-family: inherit; text-align: left;
   }
-  .res-card:hover { border-color: var(--accent, #177c80); background: #f4fafb; }
-  .res-card-name { font-size: 15px; font-weight: 800; color: var(--ink); }
-  .res-card-count { font-size: 11px; color: var(--ink-faint); }
+  .res-card-name { font-size: 15px; font-weight: 800; color: var(--ink); cursor: pointer; }
+  .res-card-name:hover { color: var(--accent, #177c80); }
+  .res-check {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; color: var(--ink-soft); cursor: pointer; user-select: none;
+  }
+  .res-check input { width: auto; accent-color: #177c80; }
   .res-chip {
     font-size: 10.5px; color: var(--ink-soft); background: #eef3f4;
     border: 1px solid var(--line-soft); border-radius: 20px; padding: 2px 9px;
@@ -6523,6 +6527,12 @@ function renderPresetBar() {
       bar.appendChild(desc);
     }
   });
+  const resBtn = document.createElement("button");
+  resBtn.textContent = "Reservoir Charts";
+  resBtn.id = "resChartsBtn";
+  resBtn.title = "Per-reservoir charts: Pool Elevation, Inflow, Outflow, Energy, Storage, Spill";
+  resBtn.addEventListener("click", () => selectReservoirCharts());
+  bar.appendChild(resBtn);
 }
 
 function selectPreset(idx) {
@@ -6533,6 +6543,7 @@ function selectPreset(idx) {
   bar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.idx === String(idx)));
   const tableBar = document.getElementById("tablePresetBar");
   if (tableBar) tableBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+  hideResCardsPanel();
   updateDataTableSectionVisibility();
   renderPreset(currentPreset);
   if (model && document.getElementById("dtSlot").options.length) {
@@ -6548,6 +6559,7 @@ function selectTablePreset(idx) {
   document.querySelectorAll("#presetBar button").forEach(b => b.classList.remove("active"));
   const tableBar = document.getElementById("tablePresetBar");
   tableBar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.idx === String(idx)));
+  hideResCardsPanel();
   updateDataTableSectionVisibility();
   renderTablePreset(TABLE_PRESETS[idx]);
 }
@@ -7257,7 +7269,7 @@ function renderTablePresetBar() {
 /* ---- Reservoir Data view: one card per reservoir, tables per slot ---- */
 
 const RESERVOIR_NAMES = [
-  "Powell", "Fontenelle", "Flaming Gorge", "BlueMesa", "MorrowPoint",
+  "Powell", "Mead", "Fontenelle", "Flaming Gorge", "BlueMesa", "MorrowPoint",
   "Crystal", "Navajo", "TaylorPark", "Vallecito", "Mohave", "Havasu",
 ];
 const RESERVOIR_SLOT_SUFFIXES = ["Pool Elevation", "Inflow", "Outflow", "Energy", "Storage", "Spill"];
@@ -7276,6 +7288,145 @@ function reservoirSlots(name) {
   return found;
 }
 
+/* ---- Reservoir pages: cards with per-slot show/hide checkboxes; the
+ * checked slots' tables (Reservoir Data) or charts (Reservoir Charts)
+ * render below the cards. ---- */
+
+let _resCardsPanel = null;
+const resDataChecked = new Set();   // slot names with a visible data table
+const resChartsChecked = new Set(); // slot names with a visible chart
+let _resChartsPreset = null;
+
+/* A synthetic preset covering every available reservoir slot. Visibility is
+ * driven by presetItems()' removed-list (synced from resChartsChecked), so
+ * each slot keeps a stable id and its chart settings survive check/uncheck. */
+function getResChartsPreset() {
+  if (!_resChartsPreset) {
+    const plots = [];
+    for (const name of RESERVOIR_NAMES) {
+      for (const s of reservoirSlots(name)) {
+        plots.push({ slot: s.slotName, plot_type: "line", transform: "raw" });
+      }
+    }
+    _resChartsPreset = {
+      id: "reservoir-charts",
+      name: "Reservoir Charts",
+      description: "",
+      layout: { columns: 2, plot_height: 400 },
+      plots: plots,
+    };
+  }
+  return _resChartsPreset;
+}
+
+function resChartChecked(slotName) {
+  return resChartsChecked.has(slotName);
+}
+
+function setResChartChecked(slotName, checked) {
+  if (checked) resChartsChecked.add(slotName); else resChartsChecked.delete(slotName);
+  syncResChartsRemoved();
+  saveUiState();
+}
+
+function syncResChartsRemoved() {
+  const preset = getResChartsPreset();
+  const ui = presetUi(preset);
+  ui.removed = preset.plots
+    .map((p, i) => ({ id: "reservoir-charts:p" + i, slot: p.slot }))
+    .filter(x => !resChartsChecked.has(x.slot))
+    .map(x => x.id);
+}
+
+function resCardsPanel() {
+  if (_resCardsPanel) return _resCardsPanel;
+  const grid = document.getElementById("plotGrid");
+  const panel = document.createElement("div");
+  panel.id = "resCardsPanel";
+  panel.style.display = "none";
+  grid.parentNode.insertBefore(panel, grid);
+  _resCardsPanel = panel;
+  return panel;
+}
+
+function hideResCardsPanel() {
+  const p = document.getElementById("resCardsPanel");
+  if (p) p.style.display = "none";
+}
+
+function renderResCardsPanel(kind) {
+  const panel = resCardsPanel();
+  panel.innerHTML = "";
+  panel.style.display = "block";
+  const hint = document.createElement("div");
+  hint.className = "hint";
+  hint.style.cssText = "margin-bottom:12px;";
+  hint.textContent = kind === "data"
+    ? "Tick slots to show their tables below; click a reservoir name to toggle all of its slots."
+    : "Tick slots to show their charts below; click a reservoir name to toggle all of its slots.";
+  panel.appendChild(hint);
+  const grid = document.createElement("div");
+  grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:16px;";
+  panel.appendChild(grid);
+  for (const name of RESERVOIR_NAMES) {
+    const slots = reservoirSlots(name);
+    if (!slots.length) continue;
+    const card = document.createElement("div");
+    card.className = "res-card";
+    const nameEl = document.createElement("div");
+    nameEl.className = "res-card-name";
+    nameEl.textContent = name;
+    nameEl.title = "Click to show/hide all slots of this reservoir";
+    nameEl.addEventListener("click", () => toggleReservoirAll(kind, name));
+    card.appendChild(nameEl);
+    for (const s of slots) {
+      const label = document.createElement("label");
+      label.className = "res-check";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName);
+      cb.addEventListener("change", () => onResCheck(kind, s.slotName, cb.checked));
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(s.sfx));
+      card.appendChild(label);
+    }
+    grid.appendChild(card);
+  }
+}
+
+function resAnyChecked(kind, name) {
+  const slots = reservoirSlots(name);
+  return slots.some(s => kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName));
+}
+
+function resAllChecked(kind, name) {
+  const slots = reservoirSlots(name);
+  return slots.length > 0 && slots.every(s => kind === "data" ? resDataChecked.has(s.slotName) : resChartChecked(s.slotName));
+}
+
+function toggleReservoirAll(kind, name) {
+  const makeChecked = !resAllChecked(kind, name);
+  for (const s of reservoirSlots(name)) {
+    if (kind === "data") {
+      if (makeChecked) resDataChecked.add(s.slotName); else resDataChecked.delete(s.slotName);
+    } else {
+      setResChartChecked(s.slotName, makeChecked);
+    }
+  }
+  renderResCardsPanel(kind);
+  if (kind === "data") renderReservoirTables(); else renderReservoirChartsContent();
+}
+
+function onResCheck(kind, slotName, checked) {
+  if (kind === "data") {
+    if (checked) resDataChecked.add(slotName); else resDataChecked.delete(slotName);
+    renderReservoirTables();
+  } else {
+    setResChartChecked(slotName, checked);
+    renderReservoirChartsContent();
+  }
+}
+
 function selectReservoirView() {
   currentPreset = null;
   viewMode = "reservoirs";
@@ -7285,66 +7436,26 @@ function selectReservoirView() {
     b.classList.toggle("active", b.id === "resDataBtn");
   });
   updateDataTableSectionVisibility();
-  renderReservoirCards();
+  renderResCardsPanel("data");
+  renderReservoirTables();
 }
 
-function renderReservoirCards() {
-  const grid = document.getElementById("plotGrid");
-  grid.innerHTML = "";
-  grid.style.gridTemplateColumns = "repeat(auto-fill, minmax(260px, 1fr))";
-  let shown = 0;
-  for (const name of RESERVOIR_NAMES) {
-    const slots = reservoirSlots(name);
-    if (!slots.length) continue;  // reservoir has none of the six slots — no card
-    shown++;
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "res-card";
-    const title = document.createElement("div");
-    title.className = "res-card-name";
-    title.textContent = name;
-    const count = document.createElement("div");
-    count.className = "res-card-count";
-    count.textContent = slots.length + " of " + RESERVOIR_SLOT_SUFFIXES.length + " slots available";
-    card.appendChild(title);
-    card.appendChild(count);
-    for (const s of slots) {
-      const chip = document.createElement("span");
-      chip.className = "res-chip";
-      chip.textContent = s.sfx;
-      card.appendChild(chip);
-    }
-    card.addEventListener("click", () => renderReservoirDetail(name));
-    grid.appendChild(card);
-  }
-  if (!shown) {
-    grid.style.gridTemplateColumns = "1fr";
-    const note = document.createElement("div");
-    note.className = "empty-note";
-    note.textContent = "None of the known reservoirs have Pool Elevation, Inflow, Outflow, Energy, Storage or Spill slots in the loaded files.";
-    grid.appendChild(note);
-  }
-}
-
-function renderReservoirDetail(name) {
+function renderReservoirTables() {
   const grid = document.getElementById("plotGrid");
   clearCellSelection();
   grid.innerHTML = "";
   grid.style.gridTemplateColumns = "minmax(0, 1fr)";
-  const back = document.createElement("button");
-  back.type = "button";
-  back.className = "mini-button";
-  back.textContent = "\u2190 All reservoirs";
-  back.addEventListener("click", () => renderReservoirCards());
-  const backRow = document.createElement("div");
-  backRow.className = "add-slot-row";
-  backRow.appendChild(back);
-  const hint = document.createElement("span");
-  hint.className = "hint";
-  hint.textContent = "Slot tables for " + name + " — use Filter & aggregate on each table.";
-  backRow.appendChild(hint);
-  grid.appendChild(backRow);
-  for (const s of reservoirSlots(name)) {
+  const blocks = [];
+  for (const name of RESERVOIR_NAMES) {
+    for (const s of reservoirSlots(name)) {
+      if (resDataChecked.has(s.slotName)) blocks.push(s);
+    }
+  }
+  if (!blocks.length) {
+    grid.innerHTML = '<div class="empty-note">Tick slots on the cards above to show their tables.</div>';
+    return;
+  }
+  for (const s of blocks) {
     const section = document.createElement("section");
     section.className = "table-block";
     grid.appendChild(section);
@@ -7358,6 +7469,28 @@ function renderReservoirDetail(name) {
     tableBlockSession.set(key, section._block);
     renderTableBlock(section, section._block);
   }
+}
+
+function selectReservoirCharts() {
+  viewMode = "reservoirCharts";
+  currentPreset = getResChartsPreset();
+  const bar = document.getElementById("presetBar");
+  bar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.id === "resChartsBtn"));
+  const tableBar = document.getElementById("tablePresetBar");
+  tableBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+  updateDataTableSectionVisibility();
+  renderResCardsPanel("charts");
+  renderReservoirChartsContent();
+}
+
+function renderReservoirChartsContent() {
+  const grid = document.getElementById("plotGrid");
+  if (!resChartsChecked.size) {
+    grid.innerHTML = '<div class="empty-note">Tick slots on the cards above to show their charts.</div>';
+    return;
+  }
+  syncResChartsRemoved();
+  renderPreset(getResChartsPreset());
 }
 
 /* ---- toolbar (trace visibility, layout, add plot, reset) ---- */
@@ -7487,6 +7620,12 @@ function setupToolbar() {
   document.getElementById("resetPresetBtn").addEventListener("click", () => {
     if (!currentPreset) return;
     delete uiState.presets[currentPreset.id || currentPreset.name || "preset"];
+    if (currentPreset === getResChartsPreset()) {
+      // reset = show every reservoir chart; keep the checkboxes in sync
+      for (const p of currentPreset.plots) resChartsChecked.add(p.slot);
+      syncResChartsRemoved();
+      renderResCardsPanel("charts");
+    }
     saveUiState();
     renderPreset(currentPreset);
   });
