@@ -158,6 +158,20 @@
   #tablePresetBar button.active { background: var(--navy, #0b3144); border-color: var(--navy, #0b3144); color: #fff; }
 
   /* custom table blocks */
+  /* Reservoir Data cards */
+  .res-card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow-sm); padding: 14px 16px; cursor: pointer;
+    font-family: inherit; text-align: left;
+  }
+  .res-card:hover { border-color: var(--accent, #177c80); background: #f4fafb; }
+  .res-card-name { font-size: 15px; font-weight: 800; color: var(--ink); }
+  .res-card-count { font-size: 11px; color: var(--ink-faint); }
+  .res-chip {
+    font-size: 10.5px; color: var(--ink-soft); background: #eef3f4;
+    border: 1px solid var(--line-soft); border-radius: 20px; padding: 2px 9px;
+  }
   .table-block {
     background: var(--panel);
     border: 1px solid var(--line);
@@ -7219,7 +7233,8 @@ function renderTablePreset(preset) {
 
 function renderTablePresetBar() {
   const bar = document.getElementById("tablePresetBar");
-  if (!TABLE_PRESETS.length) { bar.style.display = "none"; return; }
+  const reservoirsAvailable = !model || RESERVOIR_NAMES.some(name => reservoirSlots(name).length);
+  if (!TABLE_PRESETS.length && !reservoirsAvailable) { bar.style.display = "none"; return; }
   bar.style.display = "flex";
   bar.innerHTML = '<span class="bar-label">Tables</span>';
   TABLE_PRESETS.forEach((preset, idx) => {
@@ -7229,6 +7244,120 @@ function renderTablePresetBar() {
     btn.addEventListener("click", () => selectTablePreset(idx));
     bar.appendChild(btn);
   });
+  if (reservoirsAvailable) {
+    const btn = document.createElement("button");
+    btn.textContent = "Reservoir Data";
+    btn.id = "resDataBtn";
+    btn.title = "Per-reservoir tables: Pool Elevation, Inflow, Outflow, Energy, Storage, Spill";
+    btn.addEventListener("click", () => selectReservoirView());
+    bar.appendChild(btn);
+  }
+}
+
+/* ---- Reservoir Data view: one card per reservoir, tables per slot ---- */
+
+const RESERVOIR_NAMES = [
+  "Powell", "Fontenelle", "Flaming Gorge", "BlueMesa", "MorrowPoint",
+  "Crystal", "Navajo", "TaylorPark", "Vallecito", "Mohave", "Havasu",
+];
+const RESERVOIR_SLOT_SUFFIXES = ["Pool Elevation", "Inflow", "Outflow", "Energy", "Storage", "Spill"];
+
+/* slots of a reservoir — matches the display name and the no-space object
+ * prefix (e.g. "Flaming Gorge" card → "FlamingGorge.Pool Elevation") */
+function reservoirSlots(name) {
+  const prefixes = [name, name.replace(/\s+/g, "")].filter((v, i, a) => a.indexOf(v) === i);
+  const found = [];
+  for (const sfx of RESERVOIR_SLOT_SUFFIXES) {
+    for (const p of prefixes) {
+      const slotName = p + "." + sfx;
+      if (model && model.slots.has(slotName)) { found.push({ sfx: sfx, slotName: slotName }); break; }
+    }
+  }
+  return found;
+}
+
+function selectReservoirView() {
+  currentPreset = null;
+  viewMode = "reservoirs";
+  document.querySelectorAll("#presetBar button").forEach(b => b.classList.remove("active"));
+  const tableBar = document.getElementById("tablePresetBar");
+  tableBar.querySelectorAll("button").forEach(b => {
+    b.classList.toggle("active", b.id === "resDataBtn");
+  });
+  updateDataTableSectionVisibility();
+  renderReservoirCards();
+}
+
+function renderReservoirCards() {
+  const grid = document.getElementById("plotGrid");
+  grid.innerHTML = "";
+  grid.style.gridTemplateColumns = "repeat(auto-fill, minmax(260px, 1fr))";
+  let shown = 0;
+  for (const name of RESERVOIR_NAMES) {
+    const slots = reservoirSlots(name);
+    if (!slots.length) continue;  // reservoir has none of the six slots — no card
+    shown++;
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "res-card";
+    const title = document.createElement("div");
+    title.className = "res-card-name";
+    title.textContent = name;
+    const count = document.createElement("div");
+    count.className = "res-card-count";
+    count.textContent = slots.length + " of " + RESERVOIR_SLOT_SUFFIXES.length + " slots available";
+    card.appendChild(title);
+    card.appendChild(count);
+    for (const s of slots) {
+      const chip = document.createElement("span");
+      chip.className = "res-chip";
+      chip.textContent = s.sfx;
+      card.appendChild(chip);
+    }
+    card.addEventListener("click", () => renderReservoirDetail(name));
+    grid.appendChild(card);
+  }
+  if (!shown) {
+    grid.style.gridTemplateColumns = "1fr";
+    const note = document.createElement("div");
+    note.className = "empty-note";
+    note.textContent = "None of the known reservoirs have Pool Elevation, Inflow, Outflow, Energy, Storage or Spill slots in the loaded files.";
+    grid.appendChild(note);
+  }
+}
+
+function renderReservoirDetail(name) {
+  const grid = document.getElementById("plotGrid");
+  clearCellSelection();
+  grid.innerHTML = "";
+  grid.style.gridTemplateColumns = "minmax(0, 1fr)";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "mini-button";
+  back.textContent = "\u2190 All reservoirs";
+  back.addEventListener("click", () => renderReservoirCards());
+  const backRow = document.createElement("div");
+  backRow.className = "add-slot-row";
+  backRow.appendChild(back);
+  const hint = document.createElement("span");
+  hint.className = "hint";
+  hint.textContent = "Slot tables for " + name + " — use Filter & aggregate on each table.";
+  backRow.appendChild(hint);
+  grid.appendChild(backRow);
+  for (const s of reservoirSlots(name)) {
+    const section = document.createElement("section");
+    section.className = "table-block";
+    grid.appendChild(section);
+    const key = "reservoir:" + s.slotName;
+    section._blockKey = key;
+    section._isSession = false;
+    const stored = tableBlockSession.get(key);
+    const block = stored ? stored : newTableBlock(s.slotName);
+    if (!block.title) block.title = s.sfx;
+    section._block = normalizeTableBlock(block);
+    tableBlockSession.set(key, section._block);
+    renderTableBlock(section, section._block);
+  }
 }
 
 /* ---- toolbar (trace visibility, layout, add plot, reset) ---- */

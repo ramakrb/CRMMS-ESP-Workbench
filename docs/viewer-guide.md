@@ -29,9 +29,26 @@ Two bars sit above the charts:
 
 - **Plots** — the saved plot preset groups (e.g. *Powell + Mead Elevations*,
   *Powell Inflow PE*, *LC Evap*). Clicking one renders its chart cards.
-- **Tables** — the saved table presets (e.g. *Slot Analysis*). Clicking one
-  renders its table blocks in place of the charts; click a plot preset to
-  switch back.
+- **Tables** — the saved table presets (e.g. *Slot Analysis*) plus
+  **Reservoir Data**. Clicking one renders its view in place of the charts;
+  click a plot preset to switch back.
+
+---
+
+## Reservoir Data
+
+The **Reservoir Data** button in the Tables bar shows a card for each known
+reservoir — Powell, Fontenelle, Flaming Gorge, BlueMesa, MorrowPoint, Crystal,
+Navajo, TaylorPark, Vallecito, Mohave and Havasu — listing which of the six
+core slots (Pool Elevation, Inflow, Outflow, Energy, Storage, Spill) the
+loaded files contain. Reservoirs with **none** of these slots get no card.
+
+Clicking a card opens one table per available slot (e.g.
+*FlamingGorge.Pool Elevation*), each with the full **Filter & aggregate**
+panel from the Slot Analysis section — monthly values, per-year aggregation,
+scaling, value filters, cell selection and stats all work here too. Use
+**← All reservoirs** to go back. Your panel settings for each reservoir slot
+are remembered for the session.
 
 ---
 
