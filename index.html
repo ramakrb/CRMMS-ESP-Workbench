@@ -6838,10 +6838,20 @@ function renderTableBlock(section, rawBlock) {
     rm.type = "button";
     rm.className = "mini-button table-remove";
     rm.textContent = "Remove";
-    rm.title = section._isSession
-      ? "Remove this added table (this session)"
-      : "Hide this table for this session — reload the page to restore it";
+    rm.title = viewMode === "reservoirs"
+      ? "Hide this slot's table (unticks it on the reservoir card)"
+      : section._isSession
+        ? "Remove this added table (this session)"
+        : "Hide this table for this session — reload the page to restore it";
     rm.addEventListener("click", () => {
+      if (viewMode === "reservoirs") {
+        // reservoir page: Remove = untick this slot; the other tables stay
+        const slotName = String(section._blockKey).slice("reservoir:".length);
+        resDataChecked.delete(slotName);
+        renderResCardsPanel("data");
+        renderReservoirTables();
+        return;
+      }
       if (section._isSession) {
         const i = sessionTableBlocks.findIndex(b => b.__uid === Number(String(section._blockKey).slice("session#".length)));
         if (i >= 0) sessionTableBlocks.splice(i, 1);
