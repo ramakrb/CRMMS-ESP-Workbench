@@ -1,40 +1,11 @@
 "use strict";
 
 /**
- * duckdb-reader.js: Client-side Parquet reader powered by DuckDB-Wasm
- * Reads .parquet files and populates the model structure for crmms-esp-workbench.
+ * parquet-reader.js: Pure JavaScript Parquet reader powered by hyparquet.
+ * Zero external WASM or backend dependencies. Snappy decompression is built-in.
  */
 
-let _duckdb = null;
-let _db = null;
-let _conn = null;
-
-async function initDuckDB() {
-  if (_conn) return _conn;
-  const duckdb = await import("https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm");
-  const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-  const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-
-  const worker_url = URL.createObjectURL(
-    new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" })
-  );
-
-  const worker = new Worker(worker_url);
-  const logger = new duckdb.ConsoleLogger();
-  _db = new duckdb.AsyncDuckDB(logger, worker);
-  await _db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-  URL.revokeObjectURL(worker_url);
-
-  _conn = await _db.connect();
-  return _conn;
-}
-
-/**
- * Loads a .parquet file from a URL or File object into the internal CRMMS model format.
- */
 async function loadParquetModel(parquetSource, fileName) {
-  const conn = await initDuckDB();
-
   let arrayBuffer;
   if (typeof parquetSource === "string") {
     const res = await fetch(parquetSource);
@@ -48,25 +19,35 @@ async function loadParquetModel(parquetSource, fileName) {
     throw new Error("Unsupported parquet source type");
   }
 
-  const registeredName = "run_" + Math.random().toString(36).slice(2) + ".parquet";
-  await _db.registerFileBuffer(registeredName, new Uint8Array(arrayBuffer));
-
-  // Query table data
-  const result = await conn.query(`
-    SELECT 
-      period_date, year, month, timestep_type,
-      trace_number, esp_year, object_name, slot_name,
-      object_slot, value, unit, model_run_month
-    FROM '${registeredName}'
-    ORDER BY object_slot, trace_number, period_date
-  `);
+  // Import local hyparquet ESM bundle
+  const { parquetRead } = await import("./hyparquet.esm.js");
 
   const slots = new Map();
   const traceNumbers = new Set();
   let runMonthLabel = "";
 
-  const rows = result.toArray();
-  for (const row of rows) {
+  await parquetRead({
+    file: arrayBuffer,
+    onComplete: (data) => {
+      // data: array of rows or column object
+      // When columns are read, hyparquet returns an array of row arrays
+      // We read schema to get column indices
+    }
+  });
+
+  // Read full columnar data using parquetRead
+  let columnNames = [];
+  let rowList = [];
+  await parquetRead({
+    file: arrayBuffer,
+    rowFormat: "object",
+    onComplete: (rows) => {
+      rowList = rows;
+    }
+  });
+
+  for (let i = 0; i < rowList.length; i++) {
+    const row = rowList[i];
     const objectSlot = row.object_slot;
     const trace = row.trace_number;
     const dt = row.period_date;
@@ -75,6 +56,7 @@ async function loadParquetModel(parquetSource, fileName) {
     const tt = row.timestep_type;
     const unit = row.unit;
     const val = row.value;
+
     if (!runMonthLabel && row.model_run_month) {
       runMonthLabel = row.model_run_month;
     }
@@ -86,8 +68,7 @@ async function loadParquetModel(parquetSource, fileName) {
         unit: unit,
         scale: 1,
         timestepType: tt,
-        traces: new Map(),
-        files: new Set([fileName])
+        traces: new Map()
       });
     }
 
@@ -96,22 +77,13 @@ async function loadParquetModel(parquetSource, fileName) {
       slotRec.traces.set(trace, {
         timesteps: [],
         values: [],
-        points: []
+        isScalar: false
       });
     }
 
     const tr = slotRec.traces.get(trace);
     tr.timesteps.push(dt);
     tr.values.push(val);
-    tr.points.push({
-      timestep: dt,
-      periodDate: dt,
-      year: yr,
-      month: mo,
-      day: 1,
-      idx: tr.points.length + 1,
-      value: val
-    });
   }
 
   let runDate = null;
@@ -130,6 +102,7 @@ async function loadParquetModel(parquetSource, fileName) {
       number_of_runs: traceNumbers.size
     },
     slots: slots,
-    runCount: traceNumbers.size
+    runCount: traceNumbers.size,
+    runDate: runDate
   };
 }

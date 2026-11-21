@@ -154,6 +154,9 @@ function showDashboardView() {
   const tableBar = document.getElementById("tablePresetBar");
   if (tableBar) tableBar.style.display = "none";
 
+  const topHistBtn = document.getElementById("topHistBtn");
+  if (topHistBtn) topHistBtn.style.display = "none";
+
   // Hide preset buttons except "Historical Runs" while on the dashboard
   const presetBar = document.getElementById("presetBar");
   if (presetBar) {
@@ -179,6 +182,9 @@ function hideDashboardView() {
   if (tb) tb.style.display = "flex";
   const tableBar = document.getElementById("tablePresetBar");
   if (tableBar) tableBar.style.display = "flex";
+
+  const topHistBtn = document.getElementById("topHistBtn");
+  if (topHistBtn) topHistBtn.style.display = "inline-flex";
 
   // Show all preset buttons once a month run is loaded
   const presetBar = document.getElementById("presetBar");

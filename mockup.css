@@ -551,6 +551,27 @@
 .hist-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 1000px) { .hist-grid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
 @media (max-width: 700px) { .hist-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.top-hist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all .15s ease;
+}
+.top-hist-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  transform: translateY(-1px);
+}
 .month-tile {
   display: flex; flex-direction: column; gap: 4px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;

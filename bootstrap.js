@@ -174,7 +174,7 @@ function rebuildModel(options) {
   setupToolbar();
   updateFilesPopover();
 
-  // model-run badge in the title area (from the RDF's create_date metadata)
+  // model-run badge in the title area (from the RDF or Parquet create_date metadata)
   const badge = document.getElementById("runDateBadge");
   if (badge) {
     if (model.runDate) {
