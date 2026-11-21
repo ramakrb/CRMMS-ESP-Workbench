@@ -90,15 +90,22 @@ function renderDashboard() {
 
   let html = "";
   years.forEach(y => {
-    const list = _catalog.filter(m => parseInt(m.month.split("-")[0], 10) === y);
+    // Only show months that actually have available data
+    const list = _catalog.filter(m => parseInt(m.month.split("-")[0], 10) === y && m.available);
+    if (!list.length) return;
+
     if (vm === "grid") {
-      html += '<div class="hist-year"><div class="hist-year-label">' + y + ' &mdash; ' + list.filter(m => m.available).length + ' runs</div>' +
+      html += '<div class="hist-year"><div class="hist-year-label">' + y + ' &mdash; ' + list.length + ' runs</div>' +
         '<div class="hist-grid">' + list.map(tileHTML).join("") + '</div></div>';
     } else {
-      html += '<div class="hist-year"><div class="hist-year-label">' + y + ' &mdash; ' + list.filter(m => m.available).length + ' runs</div>' +
+      html += '<div class="hist-year"><div class="hist-year-label">' + y + ' &mdash; ' + list.length + ' runs</div>' +
         '<div class="timeline">' + timelineHTML(list) + '</div></div>';
     }
   });
+
+  if (!html) {
+    html = '<div style="padding: 24px; color: var(--ink-faint); text-align: center;">No model runs found for the selected year.</div>';
+  }
 
   body.innerHTML = html;
 }
@@ -194,9 +201,7 @@ async function loadMonthRun(monthStr, filePath) {
   setStatus("Loading model run " + monthStr + " from Parquet...", "loading");
   try {
     const parquetModel = await loadParquetModel(filePath, monthStr + ".parquet");
-    model = parquetModel;
-    rebuildModel({ preserveView: true });
-    setStatus("Loaded run <b>" + monthStr + "</b> via Parquet", "summary");
+    loadData([parquetModel], { replace: true, preserveView: false });
   } catch (err) {
     setStatus("Error loading " + monthStr + ": " + err.message, "error");
   }

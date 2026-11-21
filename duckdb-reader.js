@@ -136,6 +136,19 @@ async function loadParquetModel(parquetSource, fileName) {
 
   const { roles, labels } = classifyTraces(traceNumbers);
 
+  // overall period range
+  let minDate = null, maxDate = null;
+  for (const [, sd] of slotData) {
+    for (const tr of sd.traces) {
+      for (const p of tr.points) {
+        if (p.periodDate) {
+          if (minDate === null || p.periodDate < minDate) minDate = p.periodDate;
+          if (maxDate === null || p.periodDate > maxDate) maxDate = p.periodDate;
+        }
+      }
+    }
+  }
+
   let runDate = null;
   if (runMonthLabel) {
     const parts = runMonthLabel.split("-");
@@ -146,12 +159,14 @@ async function loadParquetModel(parquetSource, fileName) {
   }
 
   return {
+    name: fileName,
     files: [fileName],
     slots: slotData,
     traceNumbers: [...traceNumbers].sort((a, b) => a - b),
     roles: roles,
     labels: labels,
     conflicts: [],
+    period: minDate ? { min: minDate, max: maxDate } : null,
     runDate: runDate
   };
 }
