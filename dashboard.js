@@ -93,7 +93,7 @@ function renderDashboard() {
     const list = _catalog.filter(m => parseInt(m.month.split("-")[0], 10) === y);
     if (vm === "grid") {
       html += '<div class="hist-year"><div class="hist-year-label">' + y + ' &mdash; ' + list.filter(m => m.available).length + ' runs</div>' +
-        '<div class="month-grid">' + list.map(tileHTML).join("") + '</div></div>';
+        '<div class="hist-grid">' + list.map(tileHTML).join("") + '</div></div>';
     } else {
       html += '<div class="hist-year"><div class="hist-year-label">' + y + ' &mdash; ' + list.filter(m => m.available).length + ' runs</div>' +
         '<div class="timeline">' + timelineHTML(list) + '</div></div>';
@@ -144,12 +144,25 @@ function showDashboardView() {
   if (dt) dt.style.display = "none";
   const tb = document.getElementById("chartToolbar");
   if (tb) tb.style.display = "none";
+  const tableBar = document.getElementById("tablePresetBar");
+  if (tableBar) tableBar.style.display = "none";
 
-  // Update button active states in presetBar
-  const btns = document.querySelectorAll("#presetBar button");
-  btns.forEach(b => b.classList.remove("active"));
-  const histBtn = document.getElementById("histDashboardBtn");
-  if (histBtn) histBtn.classList.add("active");
+  // Hide preset buttons except "Historical Runs" while on the dashboard
+  const presetBar = document.getElementById("presetBar");
+  if (presetBar) {
+    presetBar.style.display = "flex";
+    const btns = presetBar.querySelectorAll("button");
+    btns.forEach(b => {
+      if (b.id === "histDashboardBtn") {
+        b.style.display = "inline-block";
+        b.classList.add("active");
+      } else {
+        b.style.display = "none";
+      }
+    });
+    const desc = presetBar.querySelector(".preset-desc");
+    if (desc) desc.style.display = "none";
+  }
 }
 
 function hideDashboardView() {
@@ -157,9 +170,23 @@ function hideDashboardView() {
   document.getElementById("plotGrid").style.display = "grid";
   const tb = document.getElementById("chartToolbar");
   if (tb) tb.style.display = "flex";
+  const tableBar = document.getElementById("tablePresetBar");
+  if (tableBar) tableBar.style.display = "flex";
 
-  const histBtn = document.getElementById("histDashboardBtn");
-  if (histBtn) histBtn.classList.remove("active");
+  // Show all preset buttons once a month run is loaded
+  const presetBar = document.getElementById("presetBar");
+  if (presetBar) {
+    presetBar.style.display = "flex";
+    const btns = presetBar.querySelectorAll("button");
+    btns.forEach(b => {
+      b.style.display = "inline-block";
+      if (b.id === "histDashboardBtn") {
+        b.classList.remove("active");
+      }
+    });
+    const desc = presetBar.querySelector(".preset-desc");
+    if (desc) desc.style.display = "block";
+  }
 }
 
 async function loadMonthRun(monthStr, filePath) {

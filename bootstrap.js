@@ -250,13 +250,24 @@ function debugDump() {
 
 async function boot() {
   if (typeof initDashboardCatalog === "function") {
-    initDashboardCatalog();
+    await initDashboardCatalog();
   }
 
   // Check if a Parquet run was requested via URL query string (e.g. ?run=2026-07)
   const urlParams = new URLSearchParams(window.location.search);
-  const requestedRun = urlParams.get("run") || "2026-07";
-  const parquetFile = "data/runs/" + requestedRun + ".parquet";
+  const requestedRun = urlParams.get("run");
+
+  if (!requestedRun) {
+    // Land on the Historical Runs dashboard first!
+    if (typeof showDashboardView === "function") {
+      renderPresetBar();
+      showDashboardView();
+      setStatus("Select a model run from the historical dashboard to view preset plots and tables.", "summary");
+      return;
+    }
+  }
+
+  const parquetFile = "data/runs/" + (requestedRun || "2026-07") + ".parquet";
 
   try {
     setStatus("Loading model run " + requestedRun + " from Parquet\u2026", "loading");
