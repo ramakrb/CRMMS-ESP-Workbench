@@ -179,7 +179,7 @@ function rebuildModel(options) {
   if (badge) {
     if (model.runDate) {
       badge.textContent = "Model run: " + model.runDate.label;
-      badge.style.display = "inline-block";
+      badge.style.display = "inline-flex";
     } else {
       badge.style.display = "none";
     }
