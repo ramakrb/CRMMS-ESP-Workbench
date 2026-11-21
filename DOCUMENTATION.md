@@ -142,9 +142,9 @@ To set up and run this project on another machine:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/bramakrishnan-doi/crmms-esp-workbench.git
-cd crmms-esp-workbench
-git checkout feature/parquet-dashboard
+git clone https://github.com/ramakrb/CRMMS-ESP-Workbench.git
+cd CRMMS-ESP-Workbench
+git checkout dev
 ```
 
 ### 2. Local Testing (No Node or Build Step Required)
@@ -159,11 +159,12 @@ npx serve .
 Open `http://localhost:8000` in your browser.
 
 ### 3. Deploying to GitHub Pages
-1. Push `feature/parquet-dashboard` to GitHub:
+1. Push changes to the `dev` branch on GitHub:
    ```bash
-   git push -u origin feature/parquet-dashboard
+   git push -u origin dev
    ```
-2. In GitHub repository settings:
-   - Navigate to **Settings** → **Pages**.
-   - Under **Build and deployment** → **Branch**, select `feature/parquet-dashboard` and folder `/ (root)`.
-   - Save. Your application will be live at `https://<username>.github.io/<repo>/`.
+2. In your GitHub repository settings:
+   - Navigate to **Settings** → **Pages** (or directly `https://github.com/ramakrb/CRMMS-ESP-Workbench/settings/pages`).
+   - Under **Build and deployment** → **Branch**, select **`dev`** and folder **`/(root)`**.
+   - Click **Save**.
+   - Your application will be live at: **`https://ramakrb.github.io/CRMMS-ESP-Workbench/`**.
