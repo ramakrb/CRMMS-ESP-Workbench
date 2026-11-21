@@ -554,17 +554,22 @@
 .top-hist-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: var(--panel);
   border: 1.5px solid var(--accent);
   color: var(--accent);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
-  padding: 6px 16px;
+  padding: 7px 18px;
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  box-sizing: border-box;
+  line-height: normal;
   transition: all .15s ease;
 }
 .top-hist-btn:hover {

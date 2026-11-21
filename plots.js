@@ -1393,15 +1393,6 @@ function renderPresetBar() {
   bar.style.display = "flex";
   bar.innerHTML = "";
 
-  // Historical Runs Button (Mockup dashboard)
-  const histBtn = document.createElement("button");
-  histBtn.id = "histDashboardBtn";
-  histBtn.type = "button";
-  histBtn.textContent = "Historical Runs";
-  histBtn.style.fontWeight = "700";
-  histBtn.addEventListener("click", () => showDashboardView());
-  bar.appendChild(histBtn);
-
   PRESETS.forEach((preset, idx) => {
     const btn = document.createElement("button");
     btn.textContent = preset.name || preset.id;

@@ -157,21 +157,10 @@ function showDashboardView() {
   const topHistBtn = document.getElementById("topHistBtn");
   if (topHistBtn) topHistBtn.style.display = "none";
 
-  // Hide preset buttons except "Historical Runs" while on the dashboard
+  // Hide preset bar completely while on the dashboard
   const presetBar = document.getElementById("presetBar");
   if (presetBar) {
-    presetBar.style.display = "flex";
-    const btns = presetBar.querySelectorAll("button");
-    btns.forEach(b => {
-      if (b.id === "histDashboardBtn") {
-        b.style.display = "inline-block";
-        b.classList.add("active");
-      } else {
-        b.style.display = "none";
-      }
-    });
-    const desc = presetBar.querySelector(".preset-desc");
-    if (desc) desc.style.display = "none";
+    presetBar.style.display = "none";
   }
 }
 
@@ -186,16 +175,13 @@ function hideDashboardView() {
   const topHistBtn = document.getElementById("topHistBtn");
   if (topHistBtn) topHistBtn.style.display = "inline-flex";
 
-  // Show all preset buttons once a month run is loaded
+  // Show preset bar once a month run is loaded
   const presetBar = document.getElementById("presetBar");
   if (presetBar) {
     presetBar.style.display = "flex";
     const btns = presetBar.querySelectorAll("button");
     btns.forEach(b => {
       b.style.display = "inline-block";
-      if (b.id === "histDashboardBtn") {
-        b.classList.remove("active");
-      }
     });
     const desc = presetBar.querySelector(".preset-desc");
     if (desc) desc.style.display = "block";
