@@ -249,6 +249,26 @@ function debugDump() {
 }
 
 async function boot() {
+  if (typeof initDashboardCatalog === "function") {
+    initDashboardCatalog();
+  }
+
+  // Check if a Parquet run was requested via URL query string (e.g. ?run=2026-07)
+  const urlParams = new URLSearchParams(window.location.search);
+  const requestedRun = urlParams.get("run") || "2026-07";
+  const parquetFile = "data/runs/" + requestedRun + ".parquet";
+
+  try {
+    setStatus("Loading model run " + requestedRun + " from Parquet\u2026", "loading");
+    const parquetModel = await loadParquetModel(parquetFile, requestedRun + ".parquet");
+    model = parquetModel;
+    rebuildModel({ preserveView: false });
+    setStatus("Loaded run <b>" + requestedRun + "</b> via Parquet (" + summarize(model) + ")", "summary");
+    return;
+  } catch (parquetErr) {
+    console.info("Parquet auto-load not available, trying RDF fallback:", parquetErr);
+  }
+
   const files = (RDF_FILES || []).filter(s => String(s).trim());
   if (!files.length) {
     showDropZone("No RDF files are configured in this page (edit the RDF_FILES list in the HTML source), so load them here.");

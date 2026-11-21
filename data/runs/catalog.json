@@ -1,0 +1,20 @@
+[
+  {
+    "month": "2026-05",
+    "file": "data/runs/2026-05.parquet",
+    "available": true,
+    "traces": 32
+  },
+  {
+    "month": "2026-06",
+    "file": "data/runs/2026-06.parquet",
+    "available": true,
+    "traces": 32
+  },
+  {
+    "month": "2026-07",
+    "file": "data/runs/2026-07.parquet",
+    "available": true,
+    "traces": 32
+  }
+]

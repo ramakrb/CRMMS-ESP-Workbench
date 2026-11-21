@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CRMMS ESP Preset Plots</title>
+<link rel="stylesheet" href="mockup.css">
 <style>
   :root {
     --ink: #122331;
@@ -626,6 +627,28 @@
 <div class="wrap">
   <div id="statusPanel"></div>
 
+  <!-- Historical Runs Dashboard section (from mockup) -->
+  <section id="dashboardSection" class="hist-card" style="display:none; margin-top: 14px;">
+    <h2>Historical Runs</h2>
+    <div class="hist-sub">Each tile is one monthly model run. Hover for details; click to load that month into the viewer.</div>
+
+    <div class="hist-controls">
+      <label>Year
+        <select id="histYearFilter">
+          <option value="all">All years</option>
+        </select>
+      </label>
+      <label>View
+        <select id="histViewMode">
+          <option value="grid">Grid</option>
+          <option value="timeline">Timeline</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="histBody"></div>
+  </section>
+
   <div id="dropZone">
     <h2>Drop .rdf files here</h2>
     <p id="dropZoneNote">RDF files could not be loaded automatically (opened from disk, or the configured files were not found).</p>
@@ -1182,6 +1205,8 @@ if (DOCS_URL) {
   document.getElementById("docsLink").style.display = "none";
 }
 </script>
+<script src="duckdb-reader.js"></script>
+<script src="dashboard.js"></script>
 <script src="parser.js"></script>
 <script src="plots.js"></script>
 <script src="tables.js"></script>

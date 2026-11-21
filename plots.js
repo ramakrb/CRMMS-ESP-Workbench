@@ -1392,11 +1392,24 @@ function renderPresetBar() {
   const bar = document.getElementById("presetBar");
   bar.style.display = "flex";
   bar.innerHTML = "";
+
+  // Historical Runs Button (Mockup dashboard)
+  const histBtn = document.createElement("button");
+  histBtn.id = "histDashboardBtn";
+  histBtn.type = "button";
+  histBtn.textContent = "Historical Runs";
+  histBtn.style.fontWeight = "700";
+  histBtn.addEventListener("click", () => showDashboardView());
+  bar.appendChild(histBtn);
+
   PRESETS.forEach((preset, idx) => {
     const btn = document.createElement("button");
     btn.textContent = preset.name || preset.id;
     btn.dataset.idx = String(idx);
-    btn.addEventListener("click", () => selectPreset(idx));
+    btn.addEventListener("click", () => {
+      hideDashboardView();
+      selectPreset(idx);
+    });
     bar.appendChild(btn);
     if (idx === 0 && (preset.description || "")) {
       const desc = document.createElement("div");
