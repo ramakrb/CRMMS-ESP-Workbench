@@ -114,41 +114,6 @@ async function loadParquetModel(parquetSource, fileName) {
     });
   }
 
-  // Build sorted traces per slot
-  const slotData = new Map();
-  for (const [slotName, rec] of slots) {
-    const traces = [];
-    for (const [traceNum, tr] of rec.traces) {
-      traces.push({
-        traceNumber: traceNum,
-        points: tr.points
-      });
-    }
-    traces.sort((a, b) => a.traceNumber - b.traceNumber);
-    slotData.set(slotName, {
-      unit: rec.unit,
-      scale: 1,
-      timestepType: rec.timestepType,
-      traces: traces,
-      files: [fileName]
-    });
-  }
-
-  const { roles, labels } = classifyTraces(traceNumbers);
-
-  // overall period range
-  let minDate = null, maxDate = null;
-  for (const [, sd] of slotData) {
-    for (const tr of sd.traces) {
-      for (const p of tr.points) {
-        if (p.periodDate) {
-          if (minDate === null || p.periodDate < minDate) minDate = p.periodDate;
-          if (maxDate === null || p.periodDate > maxDate) maxDate = p.periodDate;
-        }
-      }
-    }
-  }
-
   let runDate = null;
   if (runMonthLabel) {
     const parts = runMonthLabel.split("-");
@@ -160,13 +125,11 @@ async function loadParquetModel(parquetSource, fileName) {
 
   return {
     name: fileName,
-    files: [fileName],
-    slots: slotData,
-    traceNumbers: [...traceNumbers].sort((a, b) => a - b),
-    roles: roles,
-    labels: labels,
-    conflicts: [],
-    period: minDate ? { min: minDate, max: maxDate } : null,
-    runDate: runDate
+    meta: {
+      create_date: runDate ? `${runDate.year}-${runDate.month}-01 00:00` : "",
+      number_of_runs: traceNumbers.size
+    },
+    slots: slots,
+    runCount: traceNumbers.size
   };
 }
